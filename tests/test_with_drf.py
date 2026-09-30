@@ -206,12 +206,14 @@ class AiodrfFailingCreateSerializer(serializers.ModelSerializer):
 
 
 class DRFAuthorViewSet(drf_viewsets.ModelViewSet):
-    queryset = Author.objects.all()
+    # Ordered: the tests compare the listed names, and PostgreSQL returns an
+    # unordered query in any order.
+    queryset = Author.objects.order_by("pk")
     serializer_class = AuthorSerializer
 
 
 class AioAuthorViewSet(viewsets.ModelViewSet):
-    queryset = Author.objects.all()
+    queryset = Author.objects.order_by("pk")
     serializer_class = AuthorSerializer
 
 
@@ -316,7 +318,7 @@ def aio_sync_function(request):
 class DRFAsyncSerializerView(drf_generics.ListCreateAPIView):
     """A DRF view driving an aiodrf serializer through its sync bridges."""
 
-    queryset = Author.objects.all()
+    queryset = Author.objects.order_by("pk")
     serializer_class = AsyncAuthorSerializer
 
 
@@ -729,7 +731,7 @@ class _MixedProjectTests:
             await self.api("post", "/drf/failing-create/", data={"name": "drf"})
         with pytest.raises(RuntimeError, match="after the insert"):
             await self.api("post", "/drf/aiodrf-failing-create/", data={"name": "aio"})
-        names = [author.name async for author in Author.objects.all()]
+        names = [author.name async for author in Author.objects.order_by("pk")]
         assert names == ["Ursula", "drf"]
         with (
             override_settings(AIODRF={"ATOMIC_SAVE": False}),
