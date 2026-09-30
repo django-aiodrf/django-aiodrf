@@ -1,10 +1,12 @@
 # Changelog
 
 User-visible changes are recorded here in Keep a Changelog format.
-Version 0.0.1 is the initial, unreleased alpha. Development revisions are
+Version 0.0.1 is the initial alpha. Development revisions are
 consolidated here rather than represented as separate published releases.
 
 ## [Unreleased]
+
+## [0.0.1] - 2026-09-30
 
 ### Added
 
