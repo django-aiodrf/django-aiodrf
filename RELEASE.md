@@ -18,9 +18,17 @@ committed to `main` directly.
 Before the first release, on GitHub ([django-aiodrf/django-aiodrf](https://github.com/django-aiodrf/django-aiodrf)):
 
 - Create the `dev` branch from `main` and make `dev` the default branch.
-- Protect `main`: changes only by pull request, and the `quality-gate` check
-  of the test workflow required. Protect `dev` the same way, with the same
-  check.
+- Protect `main`: changes only by pull request, the `quality-gate` check of
+  the test workflow required, and merges restricted to the maintainers.
+  Protect `dev` the same way, with the same check, without the restriction.
+  The `main-pull-requests.yml` workflow closes pull requests into `main` that
+  are not a maintainer's from `dev`.
+- Require approval for the workflows of pull requests from forks, for all
+  external contributors (Settings → Actions → General).
+- Publish the documentation site: Settings → Pages → Source "GitHub Actions",
+  and allow `main` to deploy to the `github-pages` environment. The
+  `docs.yml` workflow publishes each push to `main` at
+  <https://django-aiodrf.github.io/django-aiodrf/>.
 - Restrict who can create version tags (`v*`) with a tag ruleset.
 - Create the `pypi` deployment environment with required reviewers.
 - Enable private vulnerability reporting (Settings → Security).
