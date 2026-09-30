@@ -59,6 +59,15 @@ def on_files(files, config):
         )
         for path in public_paths(ROOT)
     )
+    # The theme's and plugins' static files (CSS, JavaScript, fonts, the
+    # search script) come from outside the documentation directory.
+    docs_dir = Path(config.docs_dir).resolve()
+    for file in files:
+        documentation = file.abs_src_path is not None and (
+            Path(file.abs_src_path).resolve().is_relative_to(docs_dir)
+        )
+        if not documentation and published.get_file_from_path(file.src_uri) is None:
+            published.append(file)
     # Keep the repository's index unchanged; site links need built page URLs.
     content = (ROOT / "llms.txt").read_text(encoding="utf-8")
 
@@ -75,3 +84,50 @@ def on_files(files, config):
         )
     )
     return published
+
+
+# A page's stylesheet or script: ``href``/``src`` ending in .css or .js.
+_ASSET = re.compile(r'(?:href|src)="([^"#?]+\.(?:css|js))(?:[?#][^"]*)?"')
+
+
+def missing_assets(site: Path, base: str = "/") -> list[str]:
+    """
+    The stylesheets and scripts built pages reference but the site lacks.
+    ``base`` is the site's path on its host (``/django-aiodrf/``), which the
+    root-relative references of the 404 page start with.
+    """
+    missing = []
+    for page in sorted(site.rglob("*.html")):
+        for target in _ASSET.findall(page.read_text(encoding="utf-8")):
+            if re.match(r"[a-z][a-z0-9+.-]*:|//", target):
+                continue  # another origin
+            if target.startswith("/"):
+                path = (
+                    site / target.removeprefix(base)
+                    if target.startswith(base)
+                    else None
+                )
+            else:
+                path = page.parent / target
+            if path is None or not path.resolve().is_file():
+                missing.append(f"{page.relative_to(site).as_posix()}: {target}")
+    return missing
+
+
+def _site_base() -> str:
+    """The path of ``site_url`` in mkdocs.yml, ``/`` without one."""
+    from urllib.parse import urlsplit
+
+    config = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+    url = re.search(r"^site_url:\s*(\S+)", config, re.MULTILINE)
+    path = urlsplit(url[1]).path if url else "/"
+    return path if path.endswith("/") else path + "/"
+
+
+if __name__ == "__main__":
+    import sys
+
+    site = Path(sys.argv[1] if len(sys.argv) > 1 else "site")
+    problems = missing_assets(site, _site_base())
+    if problems:
+        raise SystemExit("Missing site assets:\n" + "\n".join(problems))
