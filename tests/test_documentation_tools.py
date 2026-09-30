@@ -1,5 +1,6 @@
 """Public documentation generation and lightweight CI classification contracts."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -162,3 +163,56 @@ def test_precommit_excludes_local_archives_and_uses_project_ruff():
     entries = {hook["id"]: hook["entry"] for hook in local["hooks"]}
     assert entries["ruff-check"] == "ruff check"
     assert entries["ruff-format"] == "ruff format --check"
+
+
+def test_the_site_check_finds_assets_a_page_references_but_the_build_lacks(tmp_path):
+    from tools.docs_site import missing_assets
+
+    (tmp_path / "guide").mkdir()
+    (tmp_path / "css").mkdir()
+    (tmp_path / "css/base.css").write_text("")
+    (tmp_path / "index.html").write_text(
+        '<link href="css/base.css"><script src="js/base.js"></script>'
+        '<script src="https://cdn.example/x.js"></script>'
+    )
+    (tmp_path / "guide/index.html").write_text(
+        '<link href="../css/base.css?v=1"><script src="../search/main.js"></script>'
+    )
+    (tmp_path / "404.html").write_text(
+        '<link href="/docs/css/base.css"><script src="/docs/js/base.js"></script>'
+        '<script src="/elsewhere/x.js"></script>'
+    )
+    assert missing_assets(tmp_path, "/docs/") == [
+        "404.html: /docs/js/base.js",
+        "404.html: /elsewhere/x.js",
+        "guide/index.html: ../search/main.js",
+        "index.html: js/base.js",
+    ]
+
+
+def test_the_built_site_keeps_the_themes_assets(tmp_path):
+    # The hook replaces MkDocs' files with the public documentation; the
+    # theme's CSS, JavaScript and the search script must stay in the site.
+    pytest.importorskip("mkdocs")
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mkdocs",
+            "build",
+            "--quiet",
+            "--site-dir",
+            str(tmp_path),
+        ],
+        cwd=root,
+        check=True,
+    )
+    from tools.docs_site import _site_base, missing_assets
+
+    assert (tmp_path / "css/base.css").is_file()
+    assert (tmp_path / "search/main.js").is_file()
+    assert _site_base() == "/django-aiodrf/"
+    assert missing_assets(tmp_path, _site_base()) == []

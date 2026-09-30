@@ -508,6 +508,8 @@ def docs(session):
     """Build the public site without deploying it or loading runtime extras."""
     session.install("--group", "docs")
     session.run("mkdocs", "build", "--strict", *session.posargs)
+    # A build can succeed without the theme's CSS and JavaScript.
+    session.run("python", "-m", "tools.docs_site", "site")
 
 
 @nox.session(python="3.14")
