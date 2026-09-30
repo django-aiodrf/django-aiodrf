@@ -180,8 +180,24 @@ class FixedWindowThrottled(APIView):
         return Response({"ok": True})
 
 
+# A window starts at each whole minute of the clock: with a real clock, the
+# requests of a test could straddle one and start a new count. These classes
+# keep one instant. Subclasses rather than patches: patching a class's
+# ``timer`` changes what aiodrf decides about the class afterwards.
+class FixedWindowAtOneInstant(FixedWindow):
+    timer = staticmethod(lambda: 150.0)
+
+
+class ScopedFixedWindowAtOneInstant(ScopedFixedWindowRateThrottle):
+    timer = staticmethod(lambda: 150.0)
+
+
+class FixedWindowAtOneInstantThrottled(FixedWindowThrottled):
+    throttle_classes = [FixedWindowAtOneInstant]
+
+
 class ScopedFixedWindowThrottled(FixedWindowThrottled):
-    throttle_classes = [ScopedFixedWindowRateThrottle]
+    throttle_classes = [ScopedFixedWindowAtOneInstant]
     throttle_scope = "fixed_scoped"
 
 
@@ -231,12 +247,12 @@ class _FixedWindowTests(BackendFixture):
         client = AsyncAPIClient()
         with mock.patch.object(FixedWindow, "rate", "5/min"):
             responses = await asyncio.gather(
-                *(client.get("/fixed/") for _ in range(12))
+                *(client.get("/fixed/instant/") for _ in range(12))
             )
         assert sorted(r.status_code for r in responses) == [200] * 5 + [429] * 7
 
     def test_through_wsgi(self):
-        statuses = [APIClient().get("/fixed/").status_code for _ in range(4)]
+        statuses = [APIClient().get("/fixed/instant/").status_code for _ in range(4)]
         assert statuses == [200, 200, 200, 200 if self.backend == "dummy" else 429]
 
 
@@ -486,6 +502,7 @@ urlpatterns = [
     path("aiodrf/counted/", Counted.as_view()),
     path("django/counted/", CountedWithDjango.as_view()),
     path("fixed/", FixedWindowThrottled.as_view()),
+    path("fixed/instant/", FixedWindowAtOneInstantThrottled.as_view()),
     path("fixed/scoped/", ScopedFixedWindowThrottled.as_view()),
 ]
 

@@ -78,7 +78,14 @@ FUZZ = settings(
     derandomize=True,
     database=None,
     deadline=None,
-    suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
+    # Schemathesis discards the generated requests the schema does not
+    # admit, many for a write with path and body constraints (PUT
+    # /books/{id}/): the checks concern generation speed, not the API.
+    suppress_health_check=[
+        HealthCheck.function_scoped_fixture,
+        HealthCheck.too_slow,
+        HealthCheck.filter_too_much,
+    ],
 )
 # The ASGI test client Schemathesis uses (starlette-testclient) leaves anyio
 # memory streams unclosed; nothing of the project's is involved.
