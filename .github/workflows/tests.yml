@@ -294,7 +294,10 @@ jobs:
           PY
 
   package:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.quality-gate.outputs.docs-only != 'true' && needs.quality-gate.outputs.examples-only != 'true'
+    # The gate runs with always() over jobs skipped by design (unit on main);
+    # without a status check of its own, this job's implicit success() would
+    # count those skips and never run.
+    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.quality-gate.outputs.docs-only != 'true' && needs.quality-gate.outputs.examples-only != 'true' }}
     needs: quality-gate
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -128,3 +128,24 @@ def test_manifest_requires_both_distributions_and_versioned_notes(tmp_path):
     (tmp_path / "dist" / "extra.whl").write_bytes(b"unverified")
     with pytest.raises(ValueError, match="files differ"):
         verify(tmp_path, record, SHA, "v0.0.1")
+
+
+def test_jobs_after_an_always_job_check_its_result():
+    # A job's implicit success() covers every job it depends on, transitively:
+    # after an ``if: always()`` gate over a job that is skipped by design
+    # (``unit`` on main), it would be skipped too. ``package``, which builds
+    # the release artifact, was skipped on every push to main that way.
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    for name in ("tests.yml", "release.yml", "weekly.yml"):
+        jobs = yaml.safe_load((root / ".github/workflows" / name).read_text())["jobs"]
+        gates = {job for job, spec in jobs.items() if "always()" in spec.get("if", "")}
+        for job, spec in jobs.items():
+            needs = spec.get("needs", [])
+            for gate in gates.intersection(
+                [needs] if isinstance(needs, str) else needs
+            ):
+                condition = spec.get("if", "")
+                assert "!cancelled()" in condition, (name, job)
+                assert f"needs.{gate}.result == 'success'" in condition, (name, job)
