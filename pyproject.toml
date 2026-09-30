@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "django-aiodrf"
 version = "0.0.1"
 description = "Async-native views, serializers and policies for Django REST framework."
+keywords = ["django", "django-rest-framework", "drf", "asyncio", "asgi"]
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
@@ -36,7 +37,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/django-aiodrf/django-aiodrf"
-Documentation = "https://github.com/django-aiodrf/django-aiodrf/tree/main/docs"
+Documentation = "https://django-aiodrf.github.io/django-aiodrf/"
 Repository = "https://github.com/django-aiodrf/django-aiodrf"
 Issues = "https://github.com/django-aiodrf/django-aiodrf/issues"
 Changelog = "https://github.com/django-aiodrf/django-aiodrf/blob/main/CHANGELOG.md"
