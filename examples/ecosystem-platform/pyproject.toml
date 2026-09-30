@@ -19,7 +19,12 @@ pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  # djangochannelsrestframework 1.3 calls asyncio.iscoroutinefunction,
+  # deprecated in Python 3.14, on import and on every message.
+  "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:djangochannelsrestframework",
+]
 
 [tool.aiodrf-example]
 settings-profiles = ["project.settings", "project.settings_logging", "project.settings_protection", "project.settings_debug", "project.settings_silk", "project.settings_prometheus", "project.settings_cache", "project.settings_wireup", "project.settings_whitenoise", "project.settings_whitenoise_async"]
