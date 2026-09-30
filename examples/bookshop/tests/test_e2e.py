@@ -19,6 +19,7 @@ from django.core.cache import cache
 from rest_framework.authtoken.models import Token
 
 from aiodrf.asgi import get_asgi_application
+from aiodrf.throttling import FixedWindowRateThrottle
 from bookshop.lifecycle import Resources
 from catalog.models import Author, Book
 
@@ -168,8 +169,13 @@ async def test_the_export_streams_every_book(client, books):
     assert [line["sku"] for line in lines] == ["EARTHSEA", "DISPOSSESSED", "SOLARIS"]
 
 
-async def test_anonymous_clients_are_throttled(client, books):
+async def test_anonymous_clients_are_throttled(client, books, monkeypatch):
     # DRF reads the rates once, at import: this is the configured 60/min.
+    # The windows start at whole minutes of the clock; one fixed instant keeps
+    # the 61 requests in one window wherever the test runs.
+    monkeypatch.setattr(
+        FixedWindowRateThrottle, "timer", staticmethod(lambda: 1_800_030.0)
+    )
     codes = [
         (await client.get("/search/", params={"q": "Solaris"})).status_code
         for _ in range(61)
