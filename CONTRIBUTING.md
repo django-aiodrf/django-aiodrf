@@ -176,8 +176,14 @@ tests in that environment.
 
 Development happens on `dev`; open pull requests against it. `dev` runs the
 quality checks and unit tests. `main` holds released and release-ready code
-and changes only by a pull request from `dev`, which runs the whole test
-matrix; releases are tagged on `main` ([RELEASE.md](RELEASE.md)).
+and changes only by a maintainer's pull request from `dev`, which runs the
+whole test matrix; releases are tagged on `main` ([RELEASE.md](RELEASE.md)).
+A pull request from anyone else into `main` is closed automatically.
+
+The workflows of a pull request from a fork run after a maintainer approves
+them, for every contributor. The
+[documentation site](https://django-aiodrf.github.io/django-aiodrf/) is
+published from `main`; `nox -s docs` builds it locally into `site/`.
 
 ## Pull requests
 

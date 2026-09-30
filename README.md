@@ -116,7 +116,7 @@ lists them.
 
 ## Documentation
 
-The [aiodrf documentation](https://github.com/django-aiodrf/django-aiodrf/blob/main/docs/README.md) covers migration, configuration,
+The [aiodrf documentation](https://django-aiodrf.github.io/django-aiodrf/) covers migration, configuration,
 the API reference and the [examples](https://github.com/django-aiodrf/django-aiodrf/blob/main/examples/README.md), which run locally with
 uv or with Docker Compose.
 

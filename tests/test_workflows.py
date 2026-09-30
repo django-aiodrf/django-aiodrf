@@ -219,3 +219,61 @@ def test_every_checkout_drops_its_credentials(name):
             if step.get("uses", "").startswith("actions/checkout@"):
                 options = step.get("with", {})
                 assert options.get("persist-credentials") is False, job_name
+
+
+def test_the_documentation_site_is_published_from_main_only():
+    docs = workflow("docs.yml")
+    assert docs[True] == {"push": {"branches": ["main"]}, "workflow_dispatch": None}
+    assert docs["permissions"] == {}
+    assert docs["concurrency"] == {"group": "pages", "cancel-in-progress": False}
+    build, deploy = docs["jobs"]["build"], docs["jobs"]["deploy"]
+    assert build["permissions"] == {"contents": "read"}
+    runs = [step.get("run", "") for step in build["steps"]]
+    # The same strict build as the test workflow's quality job.
+    assert "uv run --no-sync nox -s docs" in runs
+    (upload,) = (
+        step
+        for step in build["steps"]
+        if step.get("uses", "").startswith("actions/upload-pages-artifact@")
+    )
+    assert upload["with"] == {"path": "site"}
+    assert deploy["needs"] == "build"
+    assert deploy["permissions"] == {"pages": "write", "id-token": "write"}
+    assert deploy["environment"]["name"] == "github-pages"
+    assert deploy["if"] == "github.ref == 'refs/heads/main'"
+    (step,) = deploy["steps"]
+    assert step["uses"].startswith("actions/deploy-pages@")
+
+
+def test_the_documentation_urls_name_the_published_site():
+    import tomllib
+
+    site = "https://django-aiodrf.github.io/django-aiodrf/"
+    config = (WORKFLOWS.parents[1] / "mkdocs.yml").read_text()
+    assert f"site_url: {site}" in config
+    urls = tomllib.loads((WORKFLOWS.parents[1] / "pyproject.toml").read_text())[
+        "project"
+    ]["urls"]
+    assert urls["Documentation"] == site
+
+
+def test_pull_requests_into_main_come_from_the_maintainers_dev_only():
+    # pull_request_target runs this repository's code with a write token:
+    # it must not check out the pull request, and reads the fields a
+    # contributor controls (the branch name) only from the environment.
+    main = workflow("main-pull-requests.yml")
+    assert main[True] == {
+        "pull_request_target": {
+            "types": ["opened", "reopened", "edited"],
+            "branches": ["main"],
+        }
+    }
+    assert main["permissions"] == {}
+    (job,) = main["jobs"].values()
+    assert job["permissions"] == {"pull-requests": "write"}
+    (step,) = job["steps"]
+    assert "uses" not in step
+    assert "${{" not in step["run"]
+    assert step["env"]["HEAD_REF"] == "${{ github.event.pull_request.head.ref }}"
+    assert '"$PERMISSION" = admin' in step["run"]
+    assert "gh pr close" in step["run"]
