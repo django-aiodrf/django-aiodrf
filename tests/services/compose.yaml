@@ -1,0 +1,78 @@
+# Services for the PostgreSQL benchmarks and the integration tests:
+#
+#   docker compose -f tests/services/compose.yaml up -d --wait
+#   docker compose -f tests/services/compose.yaml down
+#
+# The ports are bound to localhost and can be moved with the environment
+# variables below. Data lives in memory: the benchmarks seed it every time.
+name: aiodrf-bench
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: bench
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+    ports:
+      - "127.0.0.1:${AIODRF_BENCH_PG_PORT:-55433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench -d bench"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${AIODRF_BENCH_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:9.0.6
+    ports:
+      - "127.0.0.1:${AIODRF_TEST_VALKEY_PORT:-6381}:6379"
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  # tests/ecosystem/mongodb (``nox -s ecosystem_mongodb``): a single-node
+  # replica set, which MongoDB's transactions need, and a standalone server
+  # for the fallback without them. Validate exact server/kernel compatibility.
+  mongodb:
+    image: mongo:8.2
+    command:
+      - bash
+      - -c
+      - >-
+        mkdir -p /tmp/standalone
+        && mongod --port 27018 --dbpath /tmp/standalone --bind_ip_all --fork --logpath /tmp/standalone.log
+        && exec mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "127.0.0.1:${AIODRF_BENCH_MONGODB_PORT:-27117}:27017"
+      - "127.0.0.1:${AIODRF_BENCH_MONGODB_STANDALONE_PORT:-27118}:27018"
+    tmpfs:
+      - /data/db
+    healthcheck:
+      # Initiates the replica set once; healthy when this node is primary.
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          try { rs.status() } catch (e) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27017"}]}) }
+          quit(db.hello().isWritablePrimary ? 0 : 1)
+      interval: 1s
+      timeout: 5s
+      retries: 60

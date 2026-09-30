@@ -1,0 +1,21 @@
+name: Feature proposal
+description: Propose a bounded API or integration change.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case and existing alternatives
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed API and compatibility
+      description: Explain Django/DRF behavior, opt-in configuration and maintenance requirements.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Suggest regression tests, example changes and measurements where relevant.

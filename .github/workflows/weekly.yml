@@ -1,0 +1,75 @@
+# Weekly and on demand: the canary against Django's and DRF's main branches
+# (a failure is a finding to triage, not necessarily a defect of aiodrf), and
+# the slower packaging, migration, live-HTTP and resource sessions.
+name: Weekly
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: '1'
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: '3.14'
+      - run: uv run --no-sync nox -s canary
+
+  packaging:
+    name: ${{ matrix.session }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        session: [distribution, consumer, migration]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: '3.14'
+      - run: uv run --no-sync nox -s ${{ matrix.session }}
+
+  live:
+    name: ${{ matrix.session }} ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.14', '3.14t']
+        session: [live, resources]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: ${{ matrix.python }}
+      - run: uv run --no-sync nox -s ${{ matrix.session }}-${{ matrix.python }}
+        env:
+          AIODRF_BENCH_OUTPUT: ${{ github.workspace }}/${{ matrix.session }}-${{ matrix.python }}.json
+          AIODRF_RESOURCE_OUTPUT: ${{ github.workspace }}/${{ matrix.session }}-${{ matrix.python }}.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.session }}-${{ matrix.python }}
+          path: ${{ matrix.session }}-${{ matrix.python }}.json
+          if-no-files-found: ignore

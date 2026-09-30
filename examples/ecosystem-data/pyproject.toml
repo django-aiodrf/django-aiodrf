@@ -1,0 +1,25 @@
+[project]
+name = "aiodrf-example-ecosystem-data"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["django-aiodrf","Django>=6.1,<6.2","uvicorn>=0.30","httpx>=0.27","django-money","django-phonenumber-field[phonenumberslite]","django-taggit","drf-extra-fields[Base64ImageField]","django-pydantic-field","djangorestframework-dataclasses","drf-writable-nested","drf-flex-fields","django-polymorphic","django-rest-polymorphic","django-safedelete","django-cleanup","djangorestframework-jsonapi","djangorestframework-camel-case","drf-orjson-renderer","drf-excel","nested-multipart-parser","drf-nested-routers","djangorestframework-datatables","drf-restwind","drf-tweaks","drf-standardized-errors","django-filter","rest-filters>=0.7,<0.8"]
+
+[tool.uv]
+package = false
+
+[project.optional-dependencies]
+restql = ["django-restql>=0.18,<0.19"]
+
+[tool.uv.sources]
+django-aiodrf = {path = "../..", editable = true}
+
+[dependency-groups]
+test = ["pytest>=8","pytest-django>=4.9","pytest-asyncio>=0.24","asgi-lifespan>=2.1"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "project.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]

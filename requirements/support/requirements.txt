@@ -1,0 +1,15 @@
+# Framework-neutral integration floors, updated through reviewed dependency changes.
+# Resolve together with ../ecosystem/requirements.txt; neither file is a lockfile.
+apitally>=0.25.1
+asgi-lifespan>=2.1.0
+elasticsearch[async]>=9.5.1
+opensearch-py[async]>=3.2.0
+httpx>=0.28.1
+msgspec>=0.21.1
+nested-multipart-parser>=1.6.0
+opentelemetry-api>=1.44.0
+pydantic>=2.13.5
+rules>=3.5
+servestatic>=4.3.4
+whitenoise>=6.12.0
+wireup>=2.12.0

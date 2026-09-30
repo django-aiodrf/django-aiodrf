@@ -1,0 +1,353 @@
+# Local demonstrations only. Select services explicitly; there is no default stack.
+name: aiodrf-examples
+
+x-build: &build
+  context: ..
+  dockerfile: examples/Dockerfile
+
+x-environment: &environment
+  EXAMPLE_ALLOWED_HOSTS: "${EXAMPLE_ALLOWED_HOSTS:-localhost,127.0.0.1,testserver,.example.test}"
+  EXAMPLE_REDIS_URL: redis://valkey:6379/13
+  EXAMPLE_MEMCACHED: memcached:11211
+  EXAMPLE_CACHEOPS_URL: redis://valkey:6379/14
+
+x-app: &app
+  profiles: [examples]
+  init: true
+  environment: *environment
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  stop_grace_period: 15s
+
+x-postgres: &postgres
+  profiles: [examples]
+  image: postgres:18.6-bookworm
+  environment:
+    POSTGRES_DB: example
+    POSTGRES_USER: example
+    POSTGRES_PASSWORD: local-example-only
+  healthcheck:
+    test: [CMD-SHELL, "pg_isready -U example -d example"]
+    interval: 2s
+    timeout: 2s
+    retries: 30
+
+services:
+  basics:
+    <<: *app
+    image: aiodrf-example-basics:local
+    build:
+      <<: *build
+      args: {EXAMPLE: basics}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8101}:8000"]
+
+  streaming:
+    <<: *app
+    image: aiodrf-example-streaming:local
+    build:
+      <<: *build
+      args: {EXAMPLE: streaming}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8102}:8000"]
+
+  lifespan:
+    <<: *app
+    image: aiodrf-example-lifespan:local
+    build:
+      <<: *build
+      args: {EXAMPLE: lifespan}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8103}:8000"]
+
+  list-enrichment:
+    <<: *app
+    image: aiodrf-example-list-enrichment:local
+    build:
+      <<: *build
+      args: {EXAMPLE: list-enrichment}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8104}:8000"]
+
+  typed-schemas:
+    <<: *app
+    image: aiodrf-example-typed-schemas:local
+    build:
+      <<: *build
+      args: {EXAMPLE: typed-schemas}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8105}:8000"]
+
+  serializer-backends:
+    <<: *app
+    image: aiodrf-example-serializer-backends:local
+    build:
+      <<: *build
+      args: {EXAMPLE: serializer-backends}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8106}:8000"]
+    environment:
+      <<: *environment
+      AIODRF_EXAMPLE_PROFILE: "${AIODRF_EXAMPLE_PROFILE:-normal}"
+
+  crud:
+    <<: *app
+    image: aiodrf-example-crud:local
+    build:
+      <<: *build
+      args: {EXAMPLE: crud}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8107}:8000"]
+
+  policies:
+    <<: *app
+    image: aiodrf-example-policies:local
+    build:
+      <<: *build
+      args: {EXAMPLE: policies}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8108}:8000"]
+
+  uploads:
+    <<: *app
+    image: aiodrf-example-uploads:local
+    build:
+      <<: *build
+      args: {EXAMPLE: uploads}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8109}:8000"]
+
+  tasks-django5:
+    <<: *app
+    image: aiodrf-example-tasks-django5:local
+    build:
+      <<: *build
+      args: {EXAMPLE: tasks-django5}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8110}:8000"]
+
+  tasks-django6:
+    <<: *app
+    image: aiodrf-example-tasks-django6:local
+    build:
+      <<: *build
+      args: {EXAMPLE: tasks-django6}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8111}:8000"]
+
+  telemetry:
+    <<: *app
+    image: aiodrf-example-telemetry:local
+    build:
+      <<: *build
+      args: {EXAMPLE: telemetry}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8112}:8000"]
+
+  migration:
+    <<: *app
+    image: aiodrf-example-migration:local
+    build:
+      <<: *build
+      args: {EXAMPLE: migration}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8113}:8000"]
+
+  middleware-experiment:
+    <<: *app
+    image: aiodrf-example-middleware-experiment:local
+    build:
+      <<: *build
+      args: {EXAMPLE: middleware-experiment}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8114}:8000"]
+
+  native-postgres:
+    <<: *app
+    image: aiodrf-example-native-postgres:local
+    build:
+      <<: *build
+      args: {EXAMPLE: native-postgres}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8115}:8000"]
+    depends_on:
+      native-postgres-db: {condition: service_healthy}
+    environment:
+      <<: *environment
+      PGHOST: native-postgres-db
+      PGDATABASE: example
+      PGUSER: example
+      PGPASSWORD: local-example-only
+
+  mongodb:
+    <<: *app
+    image: aiodrf-example-mongodb:local
+    build:
+      <<: *build
+      args: {EXAMPLE: mongodb}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8116}:8000"]
+    depends_on:
+      mongodb-init: {condition: service_completed_successfully}
+    environment:
+      <<: *environment
+      MONGODB_URL: mongodb://mongodb-db:27017/?replicaSet=rs0
+      MONGODB_DATABASE: example
+
+  vendor-authentication:
+    <<: *app
+    image: aiodrf-example-vendor-authentication:local
+    build:
+      <<: *build
+      args: {EXAMPLE: vendor-authentication}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8117}:8000"]
+
+  bookshop:
+    <<: *app
+    image: aiodrf-example-bookshop:local
+    build:
+      <<: *build
+      args: {EXAMPLE: bookshop}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8118}:8000"]
+
+  django-builtin:
+    <<: *app
+    image: aiodrf-example-django-builtin:local
+    build:
+      <<: *build
+      args: {EXAMPLE: django-builtin}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8119}:8000"]
+    environment:
+      <<: *environment
+      EXAMPLE_CACHE: "${EXAMPLE_CACHE:-locmem}"
+
+  ecosystem-security:
+    <<: *app
+    image: aiodrf-example-ecosystem-security:local
+    build:
+      <<: *build
+      args: {EXAMPLE: ecosystem-security}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8120}:8000"]
+
+  ecosystem-data:
+    <<: *app
+    image: aiodrf-example-ecosystem-data:local
+    build:
+      <<: *build
+      args: {EXAMPLE: ecosystem-data}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8121}:8000"]
+
+  ecosystem-platform:
+    <<: *app
+    image: aiodrf-example-ecosystem-platform:local
+    build:
+      <<: *build
+      args: {EXAMPLE: ecosystem-platform}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8122}:8000"]
+    environment:
+      <<: *environment
+      DJANGO_SETTINGS_MODULE: "${EXAMPLE_PLATFORM_SETTINGS:-project.settings}"
+
+  ecosystem-services:
+    <<: *app
+    image: aiodrf-example-ecosystem-services:local
+    build:
+      <<: *build
+      args: {EXAMPLE: ecosystem-services}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8123}:8000"]
+    depends_on:
+      valkey: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
+    volumes: [services-data:/data]
+    environment:
+      <<: *environment
+      DJANGO_SETTINGS_MODULE: "${EXAMPLE_SERVICES_SETTINGS:-project.settings_search}"
+      EXAMPLE_CACHE_BACKEND: "${EXAMPLE_CACHE_BACKEND:-valkey}"
+      EXAMPLE_DB_PATH: /data/db.sqlite3
+      EXAMPLE_SEARCH_URL: http://elasticsearch:9200
+      EXAMPLE_VALKEY_URL: valkey://valkey:6379/14
+      # Start celery-worker alongside this service to execute queued jobs.
+      EXAMPLE_CELERY_BROKER: redis://valkey:6379/15
+
+  tenancy:
+    <<: *app
+    image: aiodrf-example-tenancy:local
+    build:
+      <<: *build
+      args: {EXAMPLE: tenancy}
+    ports: ["127.0.0.1:${EXAMPLE_PORT:-8124}:8000"]
+    depends_on:
+      tenancy-db: {condition: service_healthy}
+    environment:
+      <<: *environment
+      PGHOST: tenancy-db
+      PGDATABASE: example
+      PGUSER: example
+      PGPASSWORD: local-example-only
+
+  celery-worker:
+    <<: *app
+    image: aiodrf-example-ecosystem-services:local
+    build:
+      <<: *build
+      args: {EXAMPLE: ecosystem-services}
+    depends_on:
+      ecosystem-services: {condition: service_healthy}
+    command: [celery, -A, project.celery:app, worker, --pool=solo, --loglevel=INFO]
+    healthcheck: {disable: true}
+    volumes: [services-data:/data]
+    environment:
+      EXAMPLE_DB_PATH: /data/db.sqlite3
+      EXAMPLE_CELERY_BROKER: redis://valkey:6379/15
+
+  native-postgres-db:
+    <<: *postgres
+    volumes: [native-postgres-data:/var/lib/postgresql]
+
+  tenancy-db:
+    <<: *postgres
+    volumes: [tenancy-data:/var/lib/postgresql]
+
+  mongodb-db:
+    profiles: [examples]
+    # Local fixture for hosts affected by newer MongoDB kernel checks; not a production pin.
+    image: "${EXAMPLE_MONGO_IMAGE:-mongo:8.0.4}"
+    command: [mongod, --replSet, rs0, --bind_ip_all]
+    volumes: [mongodb-data:/data/db]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  mongodb-init:
+    profiles: [examples]
+    image: "${EXAMPLE_MONGO_IMAGE:-mongo:8.0.4}"
+    depends_on:
+      mongodb-db: {condition: service_healthy}
+    volumes: ["./infra/mongo-init.js:/mongo-init.js:ro"]
+    entrypoint: [mongosh, --host, mongodb-db, --quiet, /mongo-init.js]
+
+  valkey:
+    profiles: [examples]
+    image: valkey/valkey:9.0.6
+    command: [valkey-server, --appendonly, "yes", --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    volumes: [valkey-data:/data]
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  memcached:
+    profiles: [examples]
+    image: memcached:1.6-alpine
+    command: [memcached, -m, "64"]
+
+  elasticsearch:
+    profiles: [examples]
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.ml.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    mem_limit: 2g
+    volumes: [search-data:/usr/share/elasticsearch/data]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  native-postgres-data:
+  tenancy-data:
+  mongodb-data:
+  valkey-data:
+  search-data:
+  services-data:

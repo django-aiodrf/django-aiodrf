@@ -1,0 +1,324 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: '1'
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs-only: ${{ steps.scope.outputs.docs-only }}
+      examples-only: ${{ steps.scope.outputs.examples-only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: scope
+        run: python tools/ci_scope.py >> "$GITHUB_OUTPUT"
+
+  quality:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true'
+        run: uv run --no-sync nox -s lint typecheck workflows
+      - if: needs.changes.outputs.docs-only == 'true' && needs.changes.outputs.examples-only != 'true'
+        run: uv run --no-sync pytest -q tests/test_docs.py tests/test_documentation_tools.py tests/test_api_inventory.py tests/test_examples_catalogue.py
+      - if: needs.changes.outputs.examples-only == 'true'
+        name: Check example formatting without running applications
+        run: |
+          uv run --no-sync ruff check examples
+          uv run --no-sync ruff format --check examples
+      - name: Check the public documentation index
+        run: uv run --no-sync python -m tools.llms --check
+      - name: Validate documentation build
+        run: uv run --no-sync nox -s docs
+
+  unit:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/dev' || github.base_ref == 'dev')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: '3.12', pair: django5.2-drf3.16}
+          - {python: '3.14', pair: django6.1-drf3.18}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: ${{ matrix.python }}
+      - run: uv run --no-sync nox -s 'unit-${{ matrix.python }}(${{ matrix.pair }})'
+
+  matrix:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14']
+        pair: [django5.2-drf3.16, django5.2-drf3.17, django5.2-drf3.18, django6.0-drf3.17, django6.0-drf3.18, django6.1-drf3.18]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: ${{ matrix.python }}
+      - run: uv run --no-sync nox -s 'tests-${{ matrix.python }}(${{ matrix.pair }})'
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage.core
+          PYTEST_ADDOPTS: ${{ matrix.python == '3.14' && matrix.pair == 'django6.1-drf3.18' && '--cov=aiodrf --cov-report= --cov-fail-under=0' || '' }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: matrix.python == '3.14' && matrix.pair == 'django6.1-drf3.18'
+        with:
+          name: coverage-core
+          path: .coverage.core
+          include-hidden-files: true
+          if-no-files-found: error
+
+  compatibility:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {session: tests_minimum, python: '3.12'}
+          - {session: tests_freethreaded, python: '3.14t'}
+          - {session: "drf_parity(django='5.2', drf='3.16')", python: '3.14'}
+          - {session: "drf_parity(django='5.2', drf='3.17')", python: '3.14'}
+          - {session: "drf_parity(django='6.1', drf='3.18')", python: '3.14'}
+          - {session: "adrf_compat(django='5.2', drf='3.16')", python: '3.14'}
+          - {session: "adrf_compat(django='6.1', drf='3.18')", python: '3.14'}
+          - {session: "differential(django='5.2', drf='3.16')", python: '3.14'}
+          - {session: "differential(django='6.1', drf='3.18')", python: '3.14'}
+          - {session: ecosystem_prometheus, python: '3.14'}
+          - {session: asgi_servers, python: '3.14'}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: ${{ matrix.python }}
+      - run: uv run --no-sync nox -s "${{ matrix.session }}"
+
+  examples:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: uv run --no-sync nox -s examples
+
+  ecosystem:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      valkey:
+        image: valkey/valkey:9.0.6
+        ports: ['6381:6379']
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage.ecosystem
+      PYTEST_ADDOPTS: --cov=aiodrf --cov-append --cov-report= --cov-fail-under=0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: uv run --no-sync nox -s ecosystem integrations ecosystem_valkey ecosystem_redis ecosystem_opensearch
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-ecosystem
+          path: .coverage.ecosystem
+          include-hidden-files: true
+          if-no-files-found: error
+
+  postgres:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: bench
+          POSTGRES_USER: bench
+          POSTGRES_PASSWORD: bench
+        ports: ['55433:5432']
+        options: >-
+          --health-cmd "pg_isready -U bench -d bench"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage.postgres
+      PYTEST_ADDOPTS: --cov=aiodrf --cov-append --cov-report= --cov-fail-under=0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: uv run --no-sync nox -s tests_postgres ecosystem_tenants native_db
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-postgres
+          path: .coverage.postgres
+          include-hidden-files: true
+          if-no-files-found: error
+
+  mongodb:
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage.mongodb
+      PYTEST_ADDOPTS: --cov=aiodrf --cov-append --cov-report= --cov-fail-under=0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: docker compose -f tests/services/compose.yaml up -d --wait mongodb
+      - run: uv run --no-sync nox -s ecosystem_mongodb
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-mongodb
+          path: .coverage.mongodb
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - if: always()
+        run: docker compose -f tests/services/compose.yaml down --volumes
+
+  coverage:
+    if: needs.changes.outputs.docs-only != 'true' && needs.changes.outputs.examples-only != 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main')
+    needs: [changes, matrix, ecosystem, postgres, mongodb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      - run: uv run --no-sync nox -s coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov
+          if-no-files-found: error
+
+  quality-gate:
+    if: always()
+    needs: [changes, quality, unit, matrix, compatibility, examples, ecosystem, postgres, mongodb, coverage]
+    outputs:
+      docs-only: ${{ needs.changes.outputs.docs-only }}
+      examples-only: ${{ needs.changes.outputs.examples-only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job for the target branch
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs-only }}
+          EXAMPLES_ONLY: ${{ needs.changes.outputs.examples-only }}
+        run: |
+          python - <<'PY'
+          import json, os
+          results = json.loads(os.environ["RESULTS"])
+          branch = os.environ["TARGET_BRANCH"]
+          if branch not in {"main", "dev"}:
+              raise SystemExit("Only main and dev are supported verification targets")
+          required = ["quality", "unit"] if branch == "dev" else [
+              "quality", "matrix", "compatibility", "examples",
+              "ecosystem", "postgres", "mongodb", "coverage",
+          ]
+          if os.environ.get("DOCS_ONLY") == "true" or os.environ.get("EXAMPLES_ONLY") == "true":
+              required = ["quality"]
+          required.append("changes")
+          failed = [name for name in required if results[name]["result"] != "success"]
+          if failed:
+              raise SystemExit("Required checks did not succeed: " + ", ".join(failed))
+          PY
+
+  package:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.quality-gate.outputs.docs-only != 'true' && needs.quality-gate.outputs.examples-only != 'true'
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Build wheel from source distribution
+        run: uv run --no-sync python -m build --installer uv
+      - run: uv run --no-sync twine check dist/*
+      - name: Check the installed core wheel outside the source directory
+        run: |
+          wheel_env=$(mktemp -d)
+          uv venv "$wheel_env"
+          uv pip install --python "$wheel_env/bin/python" dist/*.whl
+          cd /tmp
+          "$wheel_env/bin/python" "$GITHUB_WORKSPACE/tests/distribution/smoke.py" core
+      - run: python tools/release.py manifest --sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ github.sha }}
+          path: |
+            dist
+            release-metadata
+          if-no-files-found: error
+          retention-days: 30

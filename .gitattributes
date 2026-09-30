@@ -1,0 +1,15 @@
+# Normalize source and documentation across developer platforms.
+* text=auto
+*.py text eol=lf
+*.pyi text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.svg text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

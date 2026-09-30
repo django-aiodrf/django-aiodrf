@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a reproducible defect in aiodrf.
+body:
+  - type: markdown
+    attributes:
+      value: Report security vulnerabilities privately using SECURITY.md.
+  - type: textarea
+    id: versions
+    attributes:
+      label: Environment
+      description: Python, Django, DRF, aiodrf, ASGI server, database and relevant optional packages.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the view, serializer, relevant settings and a failing test or request.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include sanitized tracebacks and whether the equivalent DRF endpoint behaves differently.
+    validations:
+      required: true

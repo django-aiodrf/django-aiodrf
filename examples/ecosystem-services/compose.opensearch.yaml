@@ -1,0 +1,24 @@
+# Merge with examples/compose.yaml from the repository root.
+services:
+  ecosystem-services:
+    environment:
+      DJANGO_SETTINGS_MODULE: project.settings_opensearch
+      EXAMPLE_OPENSEARCH_URL: http://opensearch:9200
+    depends_on:
+      opensearch: {condition: service_healthy}
+  opensearch:
+    image: opensearchproject/opensearch:3.7.0
+    environment:
+      discovery.type: single-node
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    mem_limit: 2g
+    volumes: [opensearch-data:/usr/share/opensearch/data]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:9200/_cluster/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+volumes:
+  opensearch-data:

@@ -1,0 +1,22 @@
+[project]
+name = "aiodrf-example-typed-schemas"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["django-aiodrf","uvicorn>=0.30","httpx>=0.27","msgspec>=0.19","pydantic>=2.7","drf-spectacular>=0.28"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+django-aiodrf = { path = "../..", editable = true }
+
+[dependency-groups]
+test = ["pytest>=8", "pytest-django>=4.9", "pytest-asyncio>=0.24", "asgi-lifespan>=2.1"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "project.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]

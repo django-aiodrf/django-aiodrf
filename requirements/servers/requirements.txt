@@ -1,0 +1,3 @@
+# Minimum versions for the dedicated real-ASGI-server compatibility session.
+granian>=2.8.3
+uvicorn>=0.54.0

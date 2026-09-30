@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: pip
+    # Framework-neutral support inputs live outside this update directory.
+    directory: /requirements/ecosystem
+    schedule:
+      interval: weekly
+    target-branch: dev
+    versioning-strategy: increase
+    groups:
+      ecosystem:
+        patterns: ['*']

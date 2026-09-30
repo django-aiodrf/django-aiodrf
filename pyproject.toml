@@ -1,0 +1,225 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-aiodrf"
+version = "0.0.1"
+description = "Async-native views, serializers and policies for Django REST framework."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+authors = [{ name = "ctolon", email = "cevatbatuhan.tolon@gmail.com" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Framework :: AsyncIO",
+  "Framework :: Django",
+  "Framework :: Django :: 5.2",
+  "Framework :: Django :: 6.0",
+  "Framework :: Django :: 6.1",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Free Threading :: 2 - Beta",
+  "Topic :: Internet :: WWW/HTTP",
+  "Typing :: Typed",
+]
+dependencies = [
+  "django>=5.2",
+  "djangorestframework>=3.16",
+  "asgiref>=3.8.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/django-aiodrf/django-aiodrf"
+Documentation = "https://github.com/django-aiodrf/django-aiodrf/tree/main/docs"
+Repository = "https://github.com/django-aiodrf/django-aiodrf"
+Issues = "https://github.com/django-aiodrf/django-aiodrf/issues"
+Changelog = "https://github.com/django-aiodrf/django-aiodrf/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+spectacular = ["drf-spectacular>=0.28"]
+filter = ["django-filter>=25.1"]
+msgspec = ["msgspec>=0.19"]
+pydantic = ["pydantic>=2.7"]
+codemod = ["libcst>=1.4"]
+opentelemetry = ["opentelemetry-api>=1.27"]
+tasks = ["django-tasks>=0.12,<0.13"]
+whitenoise = ["whitenoise>=6.12"]
+granian = ["granian>=2.8,<3"]
+valkey = ["django-valkey>=0.4.1"]
+redis = ["redis>=5.0.1"]
+opensearch = ["django-opensearch-dsl>=0.8", "opensearch-py[async]>=3.2"]
+# aiodrf.contrib.async_backend. The package copies Django 6.1's ORM: pinned to
+# its 6.1 line. PostgreSQL only; psycopg needs libpq, or psycopg[binary].
+async-backend = ["django-async-backend~=6.1.5"]
+
+[dependency-groups]
+dev = [
+  "pre-commit>=4",
+  "build>=1.2",
+  "twine>=6",
+  "pytest>=8",
+  "pytest-django>=4.9",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6",
+  "hypothesis>=6.100",
+  "drf-spectacular>=0.28",
+  "django-filter>=25.1",
+  "msgspec>=0.19",
+  "pydantic>=2.7",
+  "libcst>=1.4",
+  "opentelemetry-api>=1.27",
+  "nox>=2024.10",
+  "ruff>=0.13",
+  "codespell>=2.3",
+  "mypy>=1.14",
+  "django-stubs>=5.2",
+  "djangorestframework-stubs>=3.16",
+]
+
+docs = ["mkdocs>=1.6,<2"]
+# Local live-server and deployment regression tests; never library dependencies.
+integration = ["uvicorn>=0.30", "httpx[http2]>=0.27", "psycopg[binary,pool]>=3.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aiodrf"]
+
+[tool.hatch.build.targets.sdist]
+# Local research and experimental distributions are not package sources.
+exclude = [
+  ".local",
+  "forks",
+  ".agents",
+  ".codex",
+  ".claude",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "uv.lock",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+# These need settings of their own: ``nox -s ecosystem`` and ``nox -s tests_postgres``.
+norecursedirs = [".*", "build", "dist", "*.egg", "ecosystem", "integrations", "postgres", "async_backend", "adrf_compat", "live", "deployment", "native_db_gates", "valkey", "redis", "opensearch", "differential"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "unit: isolated tests without database, network or deployment services",
+  "integration: request, database, package or service integration contracts",
+  "aiodrf_settings(**values): AIODRF values the test verifies, applied over the run's",
+]
+# Every warning fails the run: a deprecation in any supported Django or DRF
+# version is found by the matrix, not by a user.
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = [".local", "forks"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W", "I", "B", "UP", "SIM", "DJ",
+  "ASYNC", "BLE", "C4", "FURB", "G", "ISC", "LOG", "PERF", "PIE", "PL", "PT", "RET", "RUF", "S",
+  "SLOT", "TID", "TRY", "C901",
+]
+ignore = [
+  "E501", "B904", "UP031", "SIM105", "SIM108",
+  "TRY003",  # messages are written where they are raised, as in Django and DRF
+  "PLR2004",  # status codes and limits are clearer as numbers
+  "PLC0415",  # imports inside functions: optional packages and import cycles
+  "RUF012",  # DRF and Django declare policies and Meta options as class-level lists
+  "PLR0911", "PLR0912", "PLR0913", "PLR0917",  # counts of returns, branches and arguments
+]
+
+# A ratchet, not a target: today's maximum (``compiler._scalar_type``).
+# Lower it when the most complex function is reworked.
+[tool.ruff.lint.mccabe]
+max-complexity = 24
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, log in with literal passwords, and start the interpreter.
+"tests/**" = ["S101", "S105", "S106", "S301", "S603"]
+"examples/*/tests/**" = ["S101", "S106"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/aiodrf"]
+relative_files = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+# Partial jobs report separately; the combined nox/CI gate enforces 85%.
+fail_under = 0
+
+[tool.ruff.lint.isort]
+known-first-party = ["aiodrf", "tests", "bookshop", "catalog"]
+
+[tool.codespell]
+# Local research archives and vendor snapshots are not public documentation.
+skip = ".venv,.nox,.local,forks,*.json,*.html"
+# Django's async method names (aadd, acount, asend), a class of the tests and adrf's AAND.
+ignore-words-list = "aadd,aand,acount,asend,authorin"
+
+[tool.mypy]
+files = ["src/aiodrf"]
+mypy_path = "src"
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Bodies of unannotated functions are checked too.
+check_untyped_defs = true
+# A function annotated in part is annotated in full: an unannotated
+# parameter of a typed signature is ``Any`` to a typed consumer (py.typed).
+disallow_incomplete_defs = true
+
+# Fully annotated: every module of the package (its tests are not).
+[[tool.mypy.overrides]]
+module = ["aiodrf", "aiodrf.*"]
+disallow_untyped_defs = true
+
+# aiodrf replaces DRF's synchronous handlers (``get``, ``create``,
+# ``dispatch``, ...) with coroutine functions, which Django awaits, and its
+# test clients keep DRF's signatures (``data``, ``format``) over Django's.
+# Those overrides are the product, not mistakes, so they are not reported.
+[[tool.mypy.overrides]]
+module = [
+  # adrf's API overrides DRF's synchronous members with coroutines.
+  "aiodrf.contrib.adrf_compat.*",
+  "aiodrf.contrib.async_backend.views",
+  "aiodrf.generics",
+  "aiodrf.mixins",
+  "aiodrf.test",
+  "aiodrf.views",
+]
+disable_error_code = ["override"]
+
+[[tool.mypy.overrides]]
+module = [
+  "bson.*",
+  "django_async_backend.*",
+  "django_filters.*",
+  "django_mongodb_backend.*",
+  "django_mongodb_extensions.*",
+  "django_valkey.*",  # Optional vendor package does not publish typing metadata.
+  "django_opensearch_dsl.*",
+  "opensearchpy.*",
+  "auth_kit.*",
+  "knox.*",
+  "rest_framework_simplejwt.*",
+  "rest_framework.deprecation",
+  "whitenoise.*",
+]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"

@@ -1,0 +1,137 @@
+# Python template adapted from github/gitignore (CC0-1.0):
+# https://github.com/github/gitignore/blob/main/Python.gitignore
+# Project sources, .python-version and shared editor settings remain trackable.
+
+# Bytecode and native build output.
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+cython_debug/
+
+# Packaging and installers.
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+/.vscode
+/.idea
+
+# Tests, coverage and generated documentation.
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+nosetests.xml
+*.cover
+*.py.cover
+*.lcov
+htmlcov/
+cover/
+/site/
+docs/_build/
+.pybuilder/
+target/
+
+# Local Django state and service data.
+*.log
+local_settings.py
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.mo
+*.pot
+celerybeat-schedule*
+celerybeat.pid
+*.pid
+*.rdb
+*.aof
+mnesia/
+rabbitmq-data/
+activemq-data/
+examples/uploads/uploads/
+
+# Virtual environments and local credentials.
+.env
+.env.*
+!.env.example
+!.env.sample
+.envrc
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+__pypackages__/
+.pypirc
+.pdm-python
+.pdm-build/
+.pixi/*
+!.pixi/config.toml
+.streamlit/secrets.toml
+
+# Local tool state.
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+.spyderproject
+.spyproject
+.ropeproject
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.scrapy/
+.webassets-cache/
+*.sage.py
+.abstra/
+tempCodeRunnerFile.py
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+# Local resolutions are not the library's published dependency contract.
+uv.lock
+
+# Independent local repositories and review/measurement artifacts.
+/forks/django-rest-framework/
+/forks/aiodrf-contrib/
+/forks/django-fastdrf/
+/forks/aiodrf-benchmarks/
+/.local/
+/release-bundle/
+
+# Local coding-assistant configuration.
+.codex/
+.agents/
+.claude/
+AGENTS.md
+CLAUDE.md

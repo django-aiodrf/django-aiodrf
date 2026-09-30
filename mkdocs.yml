@@ -1,0 +1,51 @@
+site_name: django-aiodrf
+site_description: Awaitable Django REST framework views, serializers and policy hooks.
+docs_dir: docs
+site_dir: site
+strict: true
+use_directory_urls: true
+theme:
+  name: mkdocs
+plugins:
+  - search
+hooks:
+  - tools/docs_site.py
+markdown_extensions:
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+validation:
+  nav:
+    omitted_files: info
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+nav:
+  - Overview: README.md
+  - Documentation: docs/README.md
+  - API reference: docs/api-reference.md
+  - Configuration: docs/reference/settings.md
+  - System checks: docs/reference/checks.md
+  - Compatibility:
+      - Limitations: docs/reference/limitations.md
+      - DRF integration: docs/guides/drf-integration.md
+      - Ecosystem: docs/guides/ecosystem.md
+      - Contrib dependencies: docs/reference/contrib-dependencies.md
+      - Upstream internals: docs/reference/upstream-internals.md
+      - Async cache: docs/guides/async-cache.md
+      - Cache resilience: docs/guides/cache-resilience.md
+      - NoSQL access paths: docs/guides/async-nosql.md
+  - Performance:
+      - Tuning: docs/guides/tuning.md
+      - Tuned profile: docs/guides/tuned-profile.md
+      - Serializer backends: docs/guides/msgspec-pydantic.md
+      - CPU-bound work: docs/guides/cpu-work.md
+  - Examples:
+      - Catalogue: examples/README.md
+      - Docker setup: examples/CONTAINERS.md
+      - Feature coverage: examples/FEATURES.md
+      - Ecosystem coverage: examples/ECOSYSTEM.md
+  - Architecture: docs/framework_design.md
+  - Contributing: CONTRIBUTING.md
