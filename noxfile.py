@@ -86,7 +86,9 @@ def tests(session, django, drf):
     session.run(*PYTEST, *session.posargs)
     if not session.posargs:
         # tests/deployment is manual (it needs Uvicorn, Nginx, PostgreSQL),
-        # except the harness's own tests, which need no service.
+        # except the harness's own tests, which need no service but import
+        # its clients.
+        session.install("httpx>=0.27", "psycopg[binary]>=3.2")
         session.run(*PYTEST, "tests/deployment/test_harness.py")
 
 
