@@ -6,6 +6,19 @@ consolidated here rather than represented as separate published releases.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aiodrf_inspect_serializers` reports a schema serializer as its schema's
+  (`schema: msgspec validates and represents it`) instead of the reasons the
+  backend would decline it for, and inspects `SchemaViewMixin` views and bare
+  schema `serializer_class` declarations through the serializer they build
+  instead of listing them as not inspected.
+- The `pydantic` extra requires pydantic 2.9 or later. With pydantic 2.7 and
+  2.8, `PydanticCodec` returned a cached `bytes` value as its base64 text,
+  because those versions ignore the `val_json_bytes` setting it relies on.
+  The minimum-versions test session now installs `redis`, so the cache codec
+  tests run against the floors.
+
 ## [0.0.1] - 2026-09-30
 
 ### Added
