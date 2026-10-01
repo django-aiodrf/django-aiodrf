@@ -6,6 +6,8 @@ consolidated here rather than represented as separate published releases.
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-10-01
+
 ### Fixed
 
 - `aiodrf_inspect_serializers` reports a schema serializer as its schema's
