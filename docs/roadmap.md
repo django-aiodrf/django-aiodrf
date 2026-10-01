@@ -3,12 +3,6 @@
 This page lists planned work. The guides and reference pages describe what the
 current release does and its limits.
 
-## First release
-
-The first release, 0.0.1, will be published on PyPI together with the
-documentation site. Until then, install the package from a checkout of the
-repository as described in the [README](../README.md).
-
 ## Native schemas
 
 Pydantic and msgspec schemas can already serve as serializers, with

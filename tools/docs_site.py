@@ -33,6 +33,7 @@ def public_paths(root: Path) -> list[Path]:
         ("benchmarks", "*.md"),
         ("requirements", "*.txt"),
         ("assets/aiodrf-logo/svg", "*.svg"),
+        ("docs/stylesheets", "*.css"),
     ):
         paths.extend(
             path
@@ -84,6 +85,38 @@ def on_files(files, config):
         )
     )
     return published
+
+
+# A README wordmark: GitHub chooses the light or dark image by the reader's
+# system colour scheme.
+_PICTURE = re.compile(
+    r"<picture>\s*"
+    r'<source media="\(prefers-color-scheme: dark\)" srcset="(?P<dark>[^"]+)">\s*'
+    r'<img src="(?P<light>[^"]+)"(?P<attributes>[^>]*)>\s*'
+    r"</picture>"
+)
+
+
+def theme_logos(html: str) -> str:
+    """
+    The README wordmarks as one image per site colour mode, which the site's
+    stylesheet shows or hides: the site's mode is the reader's choice, and
+    need not match the system's.
+    """
+
+    def images(match):
+        attributes = match["attributes"]
+        return (
+            f'<img class="theme-light-only" src="{match["light"]}"{attributes}>'
+            f'<img class="theme-dark-only" src="{match["dark"]}"{attributes}>'
+        )
+
+    return _PICTURE.sub(images, html)
+
+
+def on_page_content(html, page, config, files):
+    """MkDocs hook: wordmarks that follow the site's colour mode."""
+    return theme_logos(html)
 
 
 # A page's stylesheet or script: ``href``/``src`` ending in .css or .js.

@@ -109,6 +109,28 @@ def test_documentation_wordmarks_resolve_to_supplied_assets():
             assert asset.is_file()
 
 
+def test_the_site_shows_the_wordmark_for_its_own_colour_mode():
+    # GitHub picks the wordmark by the reader's system colour scheme; the
+    # site has its own light/dark mode, which the system's need not match.
+    from tools.docs_site import theme_logos
+
+    html = (
+        "<p>Before</p>\n<picture>\n"
+        '  <source media="(prefers-color-scheme: dark)" srcset="dark.svg">\n'
+        '  <img src="light.svg" alt="django-aiodrf" width="420" height="93">\n'
+        "</picture>\n<p>After</p>"
+    )
+    assert theme_logos(html) == (
+        "<p>Before</p>\n"
+        '<img class="theme-light-only" src="light.svg" alt="django-aiodrf" '
+        'width="420" height="93">'
+        '<img class="theme-dark-only" src="dark.svg" alt="django-aiodrf" '
+        'width="420" height="93">'
+        "\n<p>After</p>"
+    )
+    assert theme_logos("<p>No picture</p>") == "<p>No picture</p>"
+
+
 def test_site_manifest_excludes_private_and_generated_files(tmp_path):
     from tools.docs_site import public_paths
 
@@ -216,3 +238,11 @@ def test_the_built_site_keeps_the_themes_assets(tmp_path):
     assert (tmp_path / "search/main.js").is_file()
     assert _site_base() == "/django-aiodrf/"
     assert missing_assets(tmp_path, _site_base()) == []
+    index = (tmp_path / "index.html").read_text()
+    assert "prefers-color-scheme" not in index
+    assert 'class="theme-light-only"' in index
+    assert 'class="theme-dark-only"' in index
+    assert (tmp_path / "docs/stylesheets/aiodrf.css").is_file()
+    assert "docs/stylesheets/aiodrf.css" in index
+    # Readers can switch between the light and dark modes.
+    assert "theme-toggle" in index or "data-bs-theme-value" in index

@@ -13,7 +13,8 @@ synchronous hooks that may perform I/O execute in a thread-sensitive worker.
 Existing DRF serializers, routers, authentication and permission classes remain
 usable.
 
-The first release is version **0.0.1**. The package is alpha and its API may change.
+The package is alpha and its API may change; [CHANGELOG.md](https://github.com/django-aiodrf/django-aiodrf/blob/main/CHANGELOG.md) lists
+the releases.
 The distribution name is `django-aiodrf`; imports use `aiodrf`.
 
 ## Installation

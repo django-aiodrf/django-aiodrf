@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from importlib.util import find_spec
 from typing import Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.module_loading import import_string
 from rest_framework.schemas.generators import EndpointEnumerator
@@ -13,7 +14,7 @@ from rest_framework.serializers import BaseSerializer
 
 from aiodrf.contrib.compiler import Eligibility, report_details
 from aiodrf.settings import aiodrf_settings
-from aiodrf.utils import user_defines
+from aiodrf.utils import definer, user_defines
 
 
 class Command(BaseCommand):
@@ -69,34 +70,48 @@ class Command(BaseCommand):
         found, not_inspected = self._serializers(options["serializers"])
         for serializer_class, usages in found.items():
             name = f"{serializer_class.__module__}.{serializer_class.__qualname__}"
-            # One serializer's failure is its record's: DRF builds fields
-            # lazily, so one needing a request may only fail in the analysis.
-            try:
-                serializer = serializer_class()
-            except Exception as exc:  # noqa: BLE001 -- serializers needing context, bare schema classes
-                reason = f"could not be instantiated: {exc}"
-                records.append(
-                    self._not_inspected(name, usages, reason, exc, options["format"])
+            library = getattr(serializer_class, "schema_library", None)
+            if library is not None:
+                # The backend does nothing for it: its schema does the work.
+                schema = Eligibility(
+                    "schema_serializer", f"{library} validates and represents it"
                 )
-                continue
-            try:
-                output = report_details(
-                    serializer, parity, backend if installed else None
-                )
-                directions = {
-                    "output": output if installed or not output.eligible else missing,
-                    "input": (
-                        report_input(serializer, backend=backend)
-                        if report_input is not None
-                        else missing
-                    ),
-                }
-            except Exception as exc:  # noqa: BLE001 -- fields needing context, the project's hooks
-                reason = f"could not be analyzed: {type(exc).__name__}: {exc}"
-                records.append(
-                    self._not_inspected(name, usages, reason, exc, options["format"])
-                )
-                continue
+                directions = {"output": schema, "input": schema}
+            else:
+                # One serializer's failure is its record's: DRF builds fields
+                # lazily, so one needing a request may only fail in the analysis.
+                try:
+                    serializer = serializer_class()
+                except Exception as exc:  # noqa: BLE001 -- serializers needing context
+                    reason = f"could not be instantiated: {exc}"
+                    records.append(
+                        self._not_inspected(
+                            name, usages, reason, exc, options["format"]
+                        )
+                    )
+                    continue
+                try:
+                    output = report_details(
+                        serializer, parity, backend if installed else None
+                    )
+                    directions = {
+                        "output": (
+                            output if installed or not output.eligible else missing
+                        ),
+                        "input": (
+                            report_input(serializer, backend=backend)
+                            if report_input is not None
+                            else missing
+                        ),
+                    }
+                except Exception as exc:  # noqa: BLE001 -- fields needing context, the project's hooks
+                    reason = f"could not be analyzed: {type(exc).__name__}: {exc}"
+                    records.append(
+                        self._not_inspected(
+                            name, usages, reason, exc, options["format"]
+                        )
+                    )
+                    continue
             records.append(
                 {
                     "serializer": name,
@@ -118,7 +133,7 @@ class Command(BaseCommand):
             if options["format"] == "text":
                 self.stdout.write(name)
                 for direction, result in directions.items():
-                    self._line(direction, result.reason)
+                    self._line(direction, result)
         # Endpoints whose serializer is not declared: what serves them is
         # only known at request time, and this report says nothing about it.
         for usage, reason in not_inspected:
@@ -167,15 +182,18 @@ class Command(BaseCommand):
             }
             # DRF routers put @action(serializer_class=...) in initkwargs.
             # Inspect declarations only; never call get_serializer_class().
-            serializer_class = getattr(callback, "initkwargs", {}).get(
-                "serializer_class", getattr(view_class, "serializer_class", None)
-            )
+            initkwargs = getattr(callback, "initkwargs", {})
+            try:
+                serializer_class = _declared_serializer(view_class, initkwargs)
+            except ImproperlyConfigured as exc:
+                not_inspected.append((usage, str(exc)))
+                continue
             # Either member of the pair may choose the serializer.
             dynamic = view_class is not None and next(
                 (
                     name
                     for name in ("get_serializer_class", "aget_serializer_class")
-                    if user_defines(view_class, name)
+                    if _chooses_serializer(view_class, name)
                 ),
                 None,
             )
@@ -218,8 +236,55 @@ class Command(BaseCommand):
             "error": str(exc),
         }
 
-    def _line(self, direction: str, reason: str | None) -> None:
-        if reason is None:
+    def _line(self, direction: str, result: Eligibility) -> None:
+        if result.eligible:
             self.stdout.write(self.style.SUCCESS(f"  {direction:<7}compiled"))
+        elif result.code == "schema_serializer":
+            self.stdout.write(f"  {direction:<7}schema: {result.reason}")
         else:
-            self.stdout.write(f"  {direction:<7}DRF: {reason}")
+            self.stdout.write(f"  {direction:<7}DRF: {result.reason}")
+
+
+def _is_schema_view(view_class: Any) -> bool:
+    from aiodrf.contrib.typed import SchemaViewMixin
+
+    return isinstance(view_class, type) and issubclass(view_class, SchemaViewMixin)
+
+
+def _declared_serializer(view_class: Any, initkwargs: dict[str, Any]) -> Any:
+    """
+    The serializer class a view declares, as the view will build it: a
+    SchemaViewMixin's schema pair, or a bare schema class adapted as
+    GenericAPIView adapts it. Raises ImproperlyConfigured when the view
+    may not use it.
+    """
+    from aiodrf.contrib.typed import _schema_serializer_for, adapt
+
+    if _is_schema_view(view_class):
+        input_schema = initkwargs.get("input_schema", view_class.input_schema)
+        output_schema = initkwargs.get("output_schema", view_class.output_schema)
+        if input_schema is not None or output_schema is not None:
+            queryset = initkwargs.get("queryset", getattr(view_class, "queryset", None))
+            return _schema_serializer_for(
+                view_class, input_schema, output_schema, queryset
+            )
+    serializer_class = initkwargs.get(
+        "serializer_class", getattr(view_class, "serializer_class", None)
+    )
+    if serializer_class is None or (
+        isinstance(serializer_class, type)
+        and issubclass(serializer_class, BaseSerializer)
+    ):
+        return serializer_class
+    return adapt(serializer_class)
+
+
+def _chooses_serializer(view_class: type, name: str) -> bool:
+    # SchemaViewMixin's get_serializer_class returns the declared pair.
+    if _is_schema_view(view_class):
+        from aiodrf.contrib.typed import SchemaViewMixin
+
+        return definer(view_class, name) not in (None, SchemaViewMixin) and (
+            user_defines(view_class, name)
+        )
+    return bool(user_defines(view_class, name))

@@ -142,9 +142,11 @@ def tests_minimum(session):
         "drf-spectacular==0.28.0",
         "django-filter==25.1",
         "msgspec==0.19.0",
-        "pydantic==2.7.0",
+        "pydantic==2.9.0",
         "libcst==1.4.0",
         "opentelemetry-api==1.27.0",
+        # Not a floor: lets the cache codec tests run against the floors above.
+        "redis",
         *TEST_DEPS,
     )
     session.install("-e", ".", "--no-deps")
