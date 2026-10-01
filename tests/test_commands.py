@@ -4,6 +4,7 @@ from io import StringIO
 from types import ModuleType
 from unittest.mock import patch
 
+import msgspec
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -15,6 +16,8 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.decorators import action
 
 from aiodrf import generics
+from aiodrf.contrib.msgspec.serializers import MsgspecSerializer
+from aiodrf.contrib.typed import SchemaViewMixin
 from aiodrf.routers import SimpleRouter
 from aiodrf.viewsets import GenericViewSet
 from tests.testapp.models import Author
@@ -341,3 +344,58 @@ def test_a_backend_that_is_not_installed_is_reported_per_direction():
     # What stays on DRF for another reason still says so.
     assert book["directions"]["output"]["code"] == "unsupported_source"
     assert book["directions"]["input"] == missing
+
+
+class AuthorStruct(msgspec.Struct):
+    name: str
+
+
+class AuthorSchemaSerializer(MsgspecSerializer):
+    class Meta:
+        schema = AuthorStruct
+
+
+def test_a_schema_serializer_is_reported_as_its_schemas():
+    records = json.loads(
+        "\n".join(
+            inspect(
+                "--format",
+                "json",
+                "--serializer",
+                f"{__name__}.AuthorSchemaSerializer",
+            )
+        )
+    )
+    expected = {
+        "eligible": False,
+        "code": "schema_serializer",
+        "reason": "msgspec validates and represents it",
+    }
+    assert records[0]["directions"] == {"output": expected, "input": expected}
+    lines = inspect("--serializer", f"{__name__}.AuthorSchemaSerializer")
+    assert lines[1] == "  output schema: msgspec validates and represents it"
+
+
+def test_schema_views_are_inspected_by_their_declarations():
+    class Schemas(SchemaViewMixin, generics.ListCreateAPIView):
+        queryset = Author.objects.all()
+        input_schema = AuthorStruct
+
+    class BareSchema(generics.ListAPIView):
+        queryset = Author.objects.all()
+        serializer_class = AuthorStruct
+
+    urls = ModuleType("inspect_schema_urls")
+    urls.urlpatterns = [
+        path("schemas/", Schemas.as_view()),
+        path("bare/", BareSchema.as_view()),
+    ]
+    with override_settings(ROOT_URLCONF=urls):
+        records = json.loads("\n".join(inspect("--format", "json")))
+    by_path = {
+        usage["path"]: record for record in records for usage in record["usages"]
+    }
+    for endpoint in ("/schemas/", "/bare/"):
+        record = by_path[endpoint]
+        assert record["directions"]["output"]["code"] == "schema_serializer", record
+        assert record["directions"]["input"]["code"] == "schema_serializer", record

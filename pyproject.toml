@@ -46,7 +46,7 @@ Changelog = "https://github.com/django-aiodrf/django-aiodrf/blob/main/CHANGELOG.
 spectacular = ["drf-spectacular>=0.28"]
 filter = ["django-filter>=25.1"]
 msgspec = ["msgspec>=0.19"]
-pydantic = ["pydantic>=2.7"]
+pydantic = ["pydantic>=2.9"]
 codemod = ["libcst>=1.4"]
 opentelemetry = ["opentelemetry-api>=1.27"]
 tasks = ["django-tasks>=0.12,<0.13"]
@@ -72,7 +72,7 @@ dev = [
   "drf-spectacular>=0.28",
   "django-filter>=25.1",
   "msgspec>=0.19",
-  "pydantic>=2.7",
+  "pydantic>=2.9",
   "libcst>=1.4",
   "opentelemetry-api>=1.27",
   "nox>=2024.10",

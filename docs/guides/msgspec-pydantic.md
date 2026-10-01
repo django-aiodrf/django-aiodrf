@@ -308,6 +308,13 @@ context is reported as it looks without it, and one that cannot be
 instantiated is listed as such; its constructor and field-building hooks
 must be safe to run without a request. No request values are included.
 
+A schema serializer (`MsgspecSerializer`, `PydanticSerializer`) is reported
+as `schema: msgspec validates and represents it` (code `schema_serializer`):
+its schema does the work in both directions, not the backend. A
+`SchemaViewMixin` view is inspected through the serializer its
+`input_schema`/`output_schema` pair builds, and a bare Struct or model set as
+`serializer_class` through the class it is adapted to.
+
 With `--format json`, input and output eligibility are reported separately.
 Eligibility means that a recognizer can be built, not that it will accept
 every value. Every record has `serializer` (a dotted path, or null),

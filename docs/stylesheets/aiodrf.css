@@ -1,0 +1,168 @@
+/* The documentation site's colours follow the aiodrf wordmark: green
+   #1E815C and slate #2A323E. Light and dark mode are Bootstrap's
+   `data-bs-theme`, which the theme sets from the reader's choice. */
+
+:root,
+[data-bs-theme="light"] {
+  --aiodrf-green: #1e815c;
+  --aiodrf-green-strong: #16664a;
+  --aiodrf-slate: #2a323e;
+  --aiodrf-surface: #f6f8fa;
+  --aiodrf-border: #d8dee4;
+  --bs-link-color: var(--aiodrf-green);
+  --bs-link-color-rgb: 30, 129, 92;
+  --bs-link-hover-color: var(--aiodrf-green-strong);
+  --bs-link-hover-color-rgb: 22, 102, 74;
+  --bs-body-color: #24292f;
+  --bs-heading-color: var(--aiodrf-slate);
+}
+
+[data-bs-theme="dark"] {
+  --aiodrf-green: #4cc496;
+  --aiodrf-green-strong: #7ad8b4;
+  --aiodrf-surface: #161b22;
+  --aiodrf-border: #30363d;
+  --bs-body-bg: #0d1117;
+  --bs-body-bg-rgb: 13, 17, 23;
+  --bs-body-color: #d6dde5;
+  --bs-heading-color: #f2f5f7;
+  --bs-link-color: var(--aiodrf-green);
+  --bs-link-color-rgb: 76, 196, 150;
+  --bs-link-hover-color: var(--aiodrf-green-strong);
+  --bs-link-hover-color-rgb: 122, 216, 180;
+}
+
+/* The README wordmarks: one image per colour mode (tools/docs_site.py). */
+[data-bs-theme="dark"] .theme-light-only,
+[data-bs-theme="light"] .theme-dark-only {
+  display: none;
+}
+
+/* The theme draws a grid image behind the page and frames every content
+   image; the wordmarks need neither. */
+body::before {
+  background: var(--bs-body-bg);
+}
+
+.col-md-9 img.theme-light-only,
+.col-md-9 img.theme-dark-only {
+  padding: 0;
+  background: none;
+  border: 0;
+  margin: 0.5rem 0 1.5rem;
+}
+
+/* Navigation bar: one row on wide screens */
+.navbar.bg-dark {
+  background-color: var(--aiodrf-slate) !important;
+  background-image: none;
+  border-bottom: 3px solid #1e815c;
+}
+
+@media (min-width: 992px) {
+  .navbar > .container {
+    max-width: 1440px;
+  }
+
+  .navbar .navbar-nav .nav-link {
+    padding-right: 0.55rem;
+    padding-left: 0.55rem;
+  }
+}
+
+.navbar .navbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.navbar .nav-link.active,
+.navbar .dropdown-item.active {
+  color: #fff;
+  background-color: rgba(30, 129, 92, 0.55);
+  border-radius: 0.3rem;
+}
+
+/* Text */
+body {
+  line-height: 1.65;
+}
+
+.col-md-9[role="main"] {
+  max-width: 54rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  margin-top: 1.6em;
+}
+
+h1:first-child {
+  margin-top: 0.4em;
+}
+
+h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--aiodrf-border);
+}
+
+a {
+  text-underline-offset: 0.15em;
+}
+
+/* Code */
+code,
+pre {
+  font-size: 0.875em;
+}
+
+:not(pre) > code {
+  padding: 0.12em 0.35em;
+  color: inherit;
+  background-color: var(--aiodrf-surface);
+  border: 1px solid var(--aiodrf-border);
+  border-radius: 0.3rem;
+}
+
+pre {
+  background-color: var(--aiodrf-surface);
+  border: 1px solid var(--aiodrf-border);
+  border-radius: 0.45rem;
+}
+
+pre > code.hljs {
+  background: transparent;
+}
+
+/* Tables */
+table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+  border-collapse: collapse;
+}
+
+table th,
+table td {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--aiodrf-border);
+  vertical-align: top;
+}
+
+table thead th {
+  background-color: var(--aiodrf-surface);
+}
+
+/* Table of contents */
+.bs-sidebar .nav > li > a {
+  color: var(--bs-body-color);
+}
+
+.bs-sidebar .nav > li > a:hover,
+.bs-sidebar .nav > .active > a {
+  color: var(--aiodrf-green);
+  border-left-color: var(--aiodrf-green);
+}
