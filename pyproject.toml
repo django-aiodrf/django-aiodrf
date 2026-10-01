@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-aiodrf"
-version = "0.0.1"
+version = "0.0.2"
 description = "Async-native views, serializers and policies for Django REST framework."
 keywords = ["django", "django-rest-framework", "drf", "asyncio", "asgi"]
 readme = "README.md"
