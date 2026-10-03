@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured, SynchronousOnlyOperatio
 from django.test import TestCase, override_settings
 from django.urls import path
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from fastdrf.prefetch import related_lookups
 from rest_framework import permissions as drf_permissions
 from rest_framework import serializers as drf_serializers
 from rest_framework.renderers import BrowsableAPIRenderer, JSONRenderer
@@ -14,7 +15,6 @@ from rest_framework.renderers import BrowsableAPIRenderer, JSONRenderer
 from aiodrf import aio, permissions, serializers, viewsets
 from aiodrf.aio import _classify
 from aiodrf.compat import FETCH_RAISE, FieldFetchBlocked
-from aiodrf.contrib.builtin.prefetch import related_lookups
 from aiodrf.response import Response
 from aiodrf.test import APIClient, AsyncAPIClient, AsyncAPIRequestFactory, count_hops
 from aiodrf.utils import Impl, async_safe, bridge_base, is_pure, resolve_pair
@@ -303,7 +303,7 @@ class AsyncSerializerTests(TestCase):
         # ``inline`` is an assertion that the instances are loaded. When that
         # is wrong Django says so; nothing is repeated in a thread.
         book = await Book.objects.aget(isbn="1")
-        with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}):
+        with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}, FASTDRF={}):
             with pytest.raises(SynchronousOnlyOperation):
                 await aio.data(LazyAuthor(book))
             loaded = await Book.objects.select_related("author").aget(isbn="1")
@@ -366,7 +366,7 @@ class FetchModeTests(TestCase):
         author = Author.objects.create(name="Ursula")
         Book.objects.create(title="A", isbn="1", author=author)
 
-    @override_settings(AIODRF={"FETCH_MODE": "raise"})
+    @override_settings(FASTDRF={"FETCH_MODE": "raise"}, AIODRF={})
     async def test_raise_catches_lazy_loads(self):
         class Lazy(drf_serializers.ModelSerializer):
             author = drf_serializers.StringRelatedField()
@@ -418,7 +418,7 @@ def test_the_purity_answer_is_kept_and_follows_later_declarations():
         assert not is_pure(klass(), "has_permission")
     register_pure(Later)
     register_pure_method(Method, "has_permission")
-    with override_settings(AIODRF={"PURE_POLICIES": [Setting]}):
+    with override_settings(AIODRF={"PURE_POLICIES": [Setting]}, FASTDRF={}):
         assert is_pure(Setting(), "has_permission")
     assert not is_pure(Setting(), "has_permission")
     assert is_pure(Later(), "has_permission")

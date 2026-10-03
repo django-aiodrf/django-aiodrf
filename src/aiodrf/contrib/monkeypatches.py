@@ -57,16 +57,15 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
+from fastdrf.renderers import _dumps_encoder
 from rest_framework import renderers, response, serializers
 from rest_framework.utils import model_meta
-
-from aiodrf.response import _dumps_encoder
 
 __all__ = ["PATCHES", "TARGETS", "applied", "apply", "revert"]
 
 
 def _weak_list_children(original: Callable[..., Any]) -> Callable[..., Any]:
-    from aiodrf.contrib.list_serializers import bind_child_weakly
+    from fastdrf.list_serializers import bind_child_weakly
 
     @functools.wraps(original)
     def __init__(self: serializers.ListSerializer, *args: Any, **kwargs: Any) -> None:
@@ -77,7 +76,7 @@ def _weak_list_children(original: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _release_drf_responses(original: Callable[..., Any]) -> Callable[..., Any]:
-    from aiodrf.response import _release
+    from fastdrf.response import _release
 
     @functools.wraps(original)
     def close(self: response.Response) -> None:

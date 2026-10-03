@@ -46,7 +46,8 @@ CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_DEFAULT_QUEUE = "aiodrf-example-services"
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
-AIODRF = {"LIFESPAN": "demo.lifecycle.lifespan"}
+AIODRF = {}
+DJANGO_LIFESPAN = "demo.lifecycle.lifespan"
 EXAMPLE_SEARCH_URL = os.environ.get("EXAMPLE_SEARCH_URL")
 EXAMPLE_OPENSEARCH_URL = os.environ.get("EXAMPLE_OPENSEARCH_URL")
 EXAMPLE_OPENSEARCH_INDEX = os.environ.get(
@@ -68,7 +69,7 @@ CACHES = {
         "LOCATION": EXAMPLE_VALKEY_URL or "valkey://127.0.0.1:6381/14",
         "KEY_PREFIX": "aiodrf-services-example",
         "OPTIONS": {
-            "CONNECTION_FACTORY": "aiodrf.contrib.valkey.LifespanConnectionFactory",
+            "CONNECTION_FACTORY": "aiodrf_async_cache.django_valkey.LifespanConnectionFactory",
             "CONNECTION_POOL_CLASS": "valkey.asyncio.connection.BlockingConnectionPool",
             "CONNECTION_POOL_KWARGS": {"max_connections": 20, "timeout": 2},
             "SOCKET_CONNECT_TIMEOUT": 2,
@@ -80,9 +81,9 @@ CACHES = {
 }
 if EXAMPLE_CACHE_BACKEND in {"redis", "valkey-native"}:
     CACHES["native"] = {
-        "BACKEND": "aiodrf.contrib.redis.AsyncRedisCache"
+        "BACKEND": "aiodrf_async_cache.redis.AsyncRedisCache"
         if EXAMPLE_CACHE_BACKEND == "redis"
-        else "aiodrf.contrib.valkey.AsyncValkeyCache",
+        else "aiodrf_async_cache.valkey.AsyncValkeyCache",
         "LOCATION": EXAMPLE_CACHE_URL or "redis://127.0.0.1:6380/14",
         "KEY_PREFIX": "aiodrf-services-example",
         "OPTIONS": {

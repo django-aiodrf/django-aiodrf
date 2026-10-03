@@ -9,7 +9,7 @@ from django.core import validators as django_validators
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.core.signals import setting_changed
 from django.db import models
-from django.utils.choices import CallableChoiceIterator
+from fastdrf._classify import _MATERIALIZED, _model_fields_call_code, _StaticClasses
 from rest_framework import fields, relations, serializers
 from rest_framework import validators as drf_validators
 
@@ -18,7 +18,6 @@ from aiodrf.utils import (
     Impl,
     class_cache,
     is_async_callable,
-    is_framework_class,
     is_pure,
     is_pure_function,
     resolve_pair,
@@ -30,13 +29,6 @@ _BUILTIN_VALIDATORS = frozenset(
     for value in vars(django_validators).values()
     if inspect.isclass(value) and value.__module__ == django_validators.__name__
 ) | {drf_validators.ProhibitSurrogateCharactersValidator}
-
-_BUILTIN_FIELDS = frozenset(
-    value
-    for module in (fields, relations)
-    for value in vars(module).values()
-    if inspect.isclass(value) and value.__module__ == module.__name__
-)
 
 
 class Kind(enum.IntEnum):
@@ -330,43 +322,6 @@ _CLASS_KINDS: weakref.WeakKeyDictionary[type, dict[str, object]] = (
 )
 
 
-# The arguments every serializer takes; anything else may change its fields.
-_PLAIN_KWARGS = frozenset({"instance", "data", "context", "partial"})
-
-
-# DRF's hooks that decide which fields a serializer has, and how they are built.
-_FIELD_HOOKS = (
-    "__init__",
-    "__getattr__",
-    "fields",
-    "get_fields",
-    "get_field_names",
-    "get_default_field_names",
-    "get_extra_kwargs",
-    "include_extra_kwargs",
-    "get_uniqueness_extra_kwargs",
-    "build_field",
-    "build_standard_field",
-    "build_relational_field",
-    "build_nested_field",
-    "build_property_field",
-    "build_url_field",
-    "build_unknown_field",
-    "get_validators",
-    "get_unique_together_validators",
-    "get_unique_for_date_validators",
-)
-
-
-# What DRF materializes on an instance the first time it is read. Once any of
-# these exists, the instance's fields or validators may have been changed
-# (``serializer.fields["x"].validators.append(...)`` is ordinary DRF); the
-# class says nothing about such an instance.
-_MATERIALIZED = frozenset(
-    {"fields", "_validators", "_readable_fields", "_writable_fields"}
-)
-
-
 def _class_kinds(serializer: Any) -> dict[Any, Any] | None:
     """
     The per-class entry for ``serializer``, or None when its classification
@@ -398,116 +353,15 @@ def _class_kinds(serializer: Any) -> dict[Any, Any] | None:
         return _CLASS_KINDS.setdefault(cls, {})
 
 
-# What DRF sets on a serializer instance over a class attribute of the same
-# name. Any other instance attribute that shadows one of the class may change
-# what DRF does: a method assigned to the instance, fields materialized (and
-# perhaps edited), a ``Meta`` or ``url_field_name`` of its own.
-_DRF_SHADOWS = frozenset({"_creation_counter", "initial", "default_empty_html"})
-
-# Declared serializers are deep-copied into every instance, which builds them
-# again from their arguments; these hooks could make the copy differ.
-_BUILD_HOOKS = (*_FIELD_HOOKS, "bind", "__deepcopy__", "__new__")
-
-# class -> the names an instance must not shadow, or None when it is not static
-_static_classes: weakref.WeakKeyDictionary[type, frozenset[str] | None] = (
-    weakref.WeakKeyDictionary()
-)
-
-
-def is_static(serializer: Any) -> bool:
-    """
-    Return True if the fields of ``serializer`` (the child of a list
-    serializer), and those of the serializers nested in it, are a function
-    of its class.
-
-    That holds for an instance built with the usual arguments only that
-    shadows nothing of its class (no fields materialized, no method assigned),
-    of a class that builds its fields with DRF's code alone from declarations
-    and a model, whose declared fields are DRF's, children included, and
-    whose declared serializers are static too. The classification cache and
-    the compiler (``aiodrf.contrib.compiler``) both keep per-class answers
-    for these alone.
-    """
-    if isinstance(serializer, serializers.ListSerializer):
-        serializer = serializer.child
-    names = _instance_shadow_names(type(serializer))
-    return (
-        names is not None
-        and _PLAIN_KWARGS.issuperset(serializer._kwargs)
-        and names.isdisjoint(vars(serializer))
-    )
-
-
-#: Set by the generic views on a serializer they built, validated and saved
-#: with framework code alone (:func:`fields_from_class`).
-FIELDS_FROM_CLASS = "_aiodrf_fields_from_class"
-
-
-def fields_from_class(serializer: Any) -> bool:
-    """
-    :func:`is_static` for a serializer whose fields exist on the instance
-    because framework code built and used them: a generic view's serializer
-    after validation and the save, when no ``get_serializer*`` or
-    ``perform_*`` of the project's and no method of the serializer's class
-    could have edited them. The generic views mark such an instance
-    (:data:`FIELDS_FROM_CLASS`); nothing else is.
-    """
-    if not getattr(serializer, FIELDS_FROM_CLASS, False):
-        return False
-    if isinstance(serializer, serializers.ListSerializer):
-        serializer = serializer.child
-    return _instance_shadow_names(type(serializer)) is not None and (
-        _PLAIN_KWARGS.issuperset(serializer._kwargs)
-    )
-
-
-def _instance_shadow_names(cls: type) -> frozenset[str] | None:
-    """
-    The names an instance of ``cls`` must not set for its fields to be those
-    of its class (:func:`is_static`), or None when they never are.
-    """
-    try:
-        return _static_classes[cls]
-    except KeyError:
-        pass
-    meta = getattr(cls, "Meta", None)
-    model = getattr(meta, "model", None)
-    static = (
-        issubclass(cls, serializers.Serializer)
-        # A child may build fields from its parent's context, or change them
-        # when bound.
-        and not getattr(meta, "depth", 0)
-        and not user_defines(cls, *_BUILD_HOOKS)
-        # The project's code, run whenever a ModelSerializer builds its fields.
-        and not (
-            issubclass(cls, serializers.ModelSerializer)
-            and model is not None
-            and _model_fields_call_code(model)
-        )
-        and all(_static_declaration(field) for field in cls._declared_fields.values())
-    )
-    names = frozenset(dir(cls)) - _DRF_SHADOWS if static else None
-    # Racing threads store the same value.
-    return _static_classes.setdefault(cls, names)
-
-
-def _static_declaration(field: Any) -> bool:
-    if isinstance(field, serializers.ListSerializer):
-        return not user_defines(field, *_BUILD_HOOKS) and _static_declaration(
-            field.child
-        )
-    if isinstance(field, serializers.BaseSerializer):
-        return _instance_shadow_names(type(field)) is not None
-    # DRF's own fields; a custom one may bind differently per parent. DRF's
-    # collections and to-many relations bind the child they were declared with.
-    return type(field) in _BUILTIN_FIELDS and all(
-        _static_declaration(child)
-        for child in (
-            getattr(field, "child", None),
-            getattr(field, "child_relation", None),
-        )
-        if child is not None
-    )
+# Which serializers are a function of their class: django-fastdrf's rule
+# (``fastdrf._classify``), with aiodrf's classes as framework code, as
+# everywhere in aiodrf (:func:`aiodrf.utils.user_defines`). django-fastdrf's
+# compiler and caches answer with its own rule, for which only the bases
+# registered with ``bridge_base`` are: a schema serializer's representation,
+# for one, is not DRF's.
+_statics = _StaticClasses(user_defines)
+is_static = _statics.is_static
+_instance_shadow_names = _statics.shadow_names
 
 
 def clear_class_kinds(*, setting: Any, **kwargs: Any) -> None:
@@ -635,7 +489,7 @@ def is_declarative_class(serializer_class: Any) -> bool:
     if model is not None and _model_fields_call_code(model):
         return False
     for klass in serializer_class.__mro__:
-        if klass.__module__.split(".", 1)[0] in ("rest_framework", "aiodrf"):
+        if klass.__module__.split(".", 1)[0] in ("rest_framework", "fastdrf", "aiodrf"):
             break
         for value in klass.__dict__.values():
             if inspect.isroutine(value) or isinstance(
@@ -648,34 +502,6 @@ def is_declarative_class(serializer_class: Any) -> bool:
         _is_declarative(field)
         for field in getattr(serializer_class, "_declared_fields", {}).values()
     )
-
-
-@class_cache
-def _model_fields_call_code(model: Any) -> bool:
-    """
-    Return True if building a serializer field from a field of ``model`` may
-    call the project's code: callable ``choices`` or ``limit_choices_to``
-    (commonly a query), a ``limit_choices_to`` applied through the related
-    model's default manager of the project's (its ``get_queryset()``), a
-    model field class of the project's, whose attributes DRF reads, or a
-    FilePathField, which lists its directory.
-    """
-    for field in model._meta.get_fields():
-        if isinstance(field, models.FilePathField) or not is_framework_class(
-            type(field)
-        ):
-            return True
-        if isinstance(getattr(field, "choices", None), CallableChoiceIterator):
-            return True
-        limit_choices_to = getattr(
-            getattr(field, "remote_field", None), "limit_choices_to", None
-        )
-        if callable(limit_choices_to) or (
-            limit_choices_to
-            and user_defines(field.related_model._default_manager, "get_queryset")
-        ):
-            return True
-    return False
 
 
 def _has_async_repr_override(serializer: Any) -> bool:

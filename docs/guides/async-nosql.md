@@ -267,7 +267,7 @@ async def lifespan() -> AsyncGenerator[MongoResources, None]:
 # project/settings.py
 MONGODB_URL = os.environ["MONGODB_URL"]
 MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "notes")
-AIODRF = {"LIFESPAN": "project.lifecycle.lifespan"}
+DJANGO_LIFESPAN = "project.lifecycle.lifespan"
 ```
 
 ```python
@@ -295,7 +295,7 @@ and allow lifespan shutdown to close it. Do not call `asyncio.run()` per request
 ```python
 # notes/native_views.py
 from aiodrf import serializers
-from aiodrf.asgi import get_lifespan_state
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from aiodrf.response import Response
 from aiodrf.views import APIView
 
@@ -466,7 +466,7 @@ async def lifespan() -> AsyncGenerator[SearchResources, None]:
         yield SearchResources(client)
 ```
 
-Set `AIODRF["LIFESPAN"] = "project.search_lifecycle.lifespan"` for that project.
+Set `DJANGO_LIFESPAN = "project.search_lifecycle.lifespan"` for that project.
 If an application needs both clients, combine their ownership in one context
 manager, for example with `AsyncExitStack`; a project has one configured
 lifespan factory, not two competing settings assignments.
@@ -474,7 +474,7 @@ lifespan factory, not two competing settings assignments.
 ```python
 from elasticsearch.dsl import AsyncDocument, AsyncSearch, Boolean, Text
 
-from aiodrf.asgi import get_lifespan_state
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from aiodrf.response import Response
 from aiodrf.views import APIView
 

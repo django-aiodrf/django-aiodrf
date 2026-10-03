@@ -27,6 +27,8 @@ from django.db.models import (
     prefetch_related_objects,
 )
 from django.http import Http404, HttpResponseBase, StreamingHttpResponse
+from fastdrf.prefetch import _lookups_for
+from fastdrf.settings import fastdrf_settings
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -40,10 +42,8 @@ from aiodrf.contrib.async_backend._package import (
     run_native,
 )
 from aiodrf.contrib.async_backend.pagination import NativePagination
-from aiodrf.contrib.builtin.prefetch import _lookups_for
 from aiodrf.generics import _CHECK_OBJECT, _FETCH_MODES, _QUERYSET
 from aiodrf.mixins import _PAGINATED_RESPONSE, Step
-from aiodrf.settings import aiodrf_settings
 from aiodrf.utils import call_pair, call_pair_sync, is_pure, run_sync, user_defines
 
 _SERIALIZER_FACTORY = (
@@ -127,7 +127,7 @@ class NativeViewMixin(_View):
 
     def optimize_queryset(self, queryset: Any) -> Any:
         # aiodrf's, split: select_related now, prefetch lookups after the read.
-        fetch_mode = _FETCH_MODES.get(aiodrf_settings.FETCH_MODE)
+        fetch_mode = _FETCH_MODES.get(fastdrf_settings.FETCH_MODE)
         if fetch_mode is not None:
             queryset = queryset.fetch_mode(fetch_mode)
         self._prefetch = list(self.prefetch_related)

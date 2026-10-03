@@ -2,18 +2,19 @@
 Settings for aiodrf live in the ``AIODRF`` setting::
 
     AIODRF = {
-        "SERIALIZER_BACKEND": "msgspec",
-        "FETCH_MODE": "peers",
+        "REPRESENTATION_MODE": "inline",
+        "ATOMIC_SAVE": True,
     }
 
-Everything DRF already configures (authentication, permission, renderer
+The optimizations aiodrf builds on (serializer backends, field caching,
+related lookups, fetch modes) are django-fastdrf's and read from its
+``FASTDRF`` setting. Everything DRF already configures (authentication, permission, renderer
 classes, ...) stays in ``REST_FRAMEWORK``; aiodrf works with DRF's own policy
 classes and never asks for them to be duplicated here.
 """
 
 import threading
 from collections.abc import Mapping
-from inspect import isasyncgenfunction, iscoroutinefunction
 from typing import Any, cast
 
 import asgiref
@@ -26,10 +27,6 @@ from rest_framework.settings import APISettings, import_from_string
 ASGIREF_VERSION = get_version_tuple(asgiref.__version__)
 
 DEFAULTS: dict[str, object] = {
-    # A zero-argument async context manager factory, or its dotted path.
-    # Used only by aiodrf.asgi.get_asgi_application(); no resources are
-    # created by importing settings or running Django's system checks.
-    "LIFESPAN": None,
     # Only affects explicitly installed aiodrf.unsafe.middleware subclasses.
     # Django groups their sync hooks; a worker stays occupied while a view awaits.
     # Configure before constructing the ASGI/WSGI handler, then restart workers.
@@ -55,39 +52,6 @@ DEFAULTS: dict[str, object] = {
     # Permission, authentication, throttle and filter classes to treat as
     # ``@async_safe`` (dotted paths).
     "PURE_POLICIES": [],
-    # Django 6.1+ fetch mode applied to querysets of generic views:
-    # None, "peers" (FETCH_PEERS) or "raise" (FETCH_RAISE).
-    "FETCH_MODE": None,
-    # Serializer backend used by ``aiodrf.contrib`` compilers:
-    # "drf", "msgspec", "pydantic" or "python" (output only, no dependency).
-    "SERIALIZER_BACKEND": "drf",
-    # "strict" only compiles serializers whose output is identical to DRF's;
-    # "fast" also accepts the documented differences.
-    "SERIALIZER_BACKEND_PARITY": "strict",
-    # What happens to output the backend cannot compile: "drf" uses
-    # DRF for it, "error" raises ImproperlyConfigured with the reason (for
-    # tests and serializers that must not fall back silently).
-    # ``Meta.serializer_backend_fallback`` overrides it per serializer.
-    # Input recognition always falls back to DRF when it declines.
-    "SERIALIZER_BACKEND_FALLBACK": "drf",
-    # What a view's serializer may be: "drf" (a DRF serializer), "msgspec"
-    # (a Struct or ``MsgspecSerializer``), "pydantic" (a model or
-    # ``PydanticSerializer``). Checked when a URL is built (``as_view``), by
-    # ``manage.py check``, and for a serializer chosen per request.
-    "ALLOWED_SERIALIZER_BACKENDS": ["drf", "msgspec", "pydantic"],
-    # Build the fields of an aiodrf ModelSerializer class once and give each
-    # instance a deep copy, for classes whose fields depend only on the class
-    # (no field-building hooks, no ``Meta.depth``). ``Meta`` and models must
-    # not change at runtime.
-    "CACHE_SERIALIZER_FIELDS": False,
-    # Opt-in copying of exact built-in scalar fields from the cached template.
-    # "compiled" additionally plans recursive constructor-argument copies.
-    # Custom copying and unsupported values retain DRF deepcopy.
-    "FIELD_COPY_MODE": "deepcopy",
-    # Look up the items of ``PrimaryKeyRelatedField(many=True)`` input with
-    # one query (``pk__in``) instead of one ``get(pk=...)`` per item when
-    # aiodrf validates. Instances and errors are DRF's.
-    "BATCH_RELATED_LOOKUPS": False,
     # Serve the adrf modules from aiodrf (aiodrf.contrib.adrf_compat), so a
     # project written for adrf runs unchanged. Read once, when Django loads
     # aiodrf's app; adrf must not be installed.
@@ -101,7 +65,34 @@ DEFAULTS: dict[str, object] = {
     "REQUEST_THREADS": None,
 }
 
-SERIALIZER_KINDS = ("drf", "msgspec", "pydantic")
+# Settings of the optimizations django-fastdrf provides, read from its
+# ``FASTDRF`` setting since aiodrf builds on it.
+MOVED_TO_FASTDRF = frozenset(
+    {
+        "SERIALIZER_BACKEND",
+        "SERIALIZER_BACKEND_PARITY",
+        "SERIALIZER_BACKEND_FALLBACK",
+        "ALLOWED_SERIALIZER_BACKENDS",
+        "CACHE_SERIALIZER_FIELDS",
+        "FIELD_COPY_MODE",
+        "BATCH_RELATED_LOOKUPS",
+        "FETCH_MODE",
+    }
+)
+
+
+def moved_settings_error(user_settings: Mapping[str, Any]) -> str | None:
+    """The error for ``AIODRF`` keys that are now ``FASTDRF``'s, or None."""
+    if "LIFESPAN" in user_settings:
+        return "AIODRF['LIFESPAN'] moved to DJANGO_LIFESPAN; install django-aiodrf[lifespan]."
+    moved = sorted(MOVED_TO_FASTDRF.intersection(user_settings))
+    if not moved:
+        return None
+    return (
+        f"AIODRF[{moved[0]!r}] is now FASTDRF[{moved[0]!r}]: django-fastdrf "
+        f"provides it. Move {', '.join(map(repr, moved))} from AIODRF to FASTDRF."
+    )
+
 
 # Lists of dotted paths. Classes are accepted as well.
 IMPORT_STRINGS = ["INLINE_RENDERERS", "PURE_POLICIES"]
@@ -115,13 +106,8 @@ REMOVED_CHOICES = {
 }
 
 CHOICES = {
-    "FIELD_COPY_MODE": ("deepcopy", "clone", "compiled"),
     "VALIDATION_UNKNOWN": ("thread", "inline"),
     "REPRESENTATION_MODE": ("thread", "inline"),
-    "FETCH_MODE": (None, "peers", "raise"),
-    "SERIALIZER_BACKEND": ("drf", "msgspec", "pydantic", "python"),
-    "SERIALIZER_BACKEND_PARITY": ("strict", "fast"),
-    "SERIALIZER_BACKEND_FALLBACK": ("drf", "error"),
     "ADRF_COMPAT": (False, True),
 }
 
@@ -148,19 +134,6 @@ def _classes_or_paths(name: str, value: Any) -> str | None:
         return f"AIODRF[{name!r}] must be a list of classes or dotted paths."
     if any(not isinstance(item, (str, type)) for item in value):
         return f"AIODRF[{name!r}] entries must be classes or dotted paths."
-    return None
-
-
-def _serializer_kinds(name: str, value: Any) -> str | None:
-    if (
-        not isinstance(value, (list, tuple))
-        or not value
-        or any(item not in SERIALIZER_KINDS for item in value)
-    ):
-        return (
-            f"Invalid value {value!r} for AIODRF[{name!r}]; expected a non-empty list "
-            f"of {', '.join(map(repr, SERIALIZER_KINDS))}."
-        )
     return None
 
 
@@ -198,44 +171,18 @@ def _unsafe_sync_middleware(name: str, value: Any) -> str | None:
     return None
 
 
-def _lifespan(name: str, value: Any) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str) and not callable(value):
-        return "AIODRF['LIFESPAN'] must be None, a dotted path or a callable."
-    if any(
-        check(candidate)
-        for check in (iscoroutinefunction, isasyncgenfunction)
-        for candidate in (value, value.__call__ if callable(value) else None)
-    ):
-        return (
-            "AIODRF['LIFESPAN'] must return an async context manager; "
-            "decorate an async generator with @contextlib.asynccontextmanager."
-        )
-    return None
-
-
 def _choice_of_booleans(name: str, value: Any) -> str | None:
     return _choice(name, value) or _boolean(name, value)
 
 
 # One validator per setting: ``(name, value) -> message or None``.
 VALIDATORS = {
-    "LIFESPAN": _lifespan,
     "UNSAFE_SYNC_MIDDLEWARE": _unsafe_sync_middleware,
     "VALIDATION_UNKNOWN": _choice,
     "REPRESENTATION_MODE": _choice,
     "ATOMIC_SAVE": _boolean,
     "INLINE_RENDERERS": _classes_or_paths,
     "PURE_POLICIES": _classes_or_paths,
-    "FETCH_MODE": _choice,
-    "SERIALIZER_BACKEND": _choice,
-    "SERIALIZER_BACKEND_PARITY": _choice,
-    "SERIALIZER_BACKEND_FALLBACK": _choice,
-    "ALLOWED_SERIALIZER_BACKENDS": _serializer_kinds,
-    "CACHE_SERIALIZER_FIELDS": _boolean,
-    "FIELD_COPY_MODE": _choice,
-    "BATCH_RELATED_LOOKUPS": _boolean,
     "ADRF_COMPAT": _choice_of_booleans,
     "MONKEYPATCHES": _patch_names,
     "REQUEST_THREADS": _positive_or_none,
@@ -246,17 +193,6 @@ def setting_error(name: str, value: Any) -> str | None:
     """Validate a value before either runtime access or a system check uses it."""
     validator = VALIDATORS.get(name)
     return validator(name, value) if validator is not None else None
-
-
-def resolve_lifespan(value: Any) -> Any:
-    """Import and validate the factory without calling it."""
-    if isinstance(value, str):
-        value = import_from_string(value, "LIFESPAN")
-        if not callable(value):
-            raise ImproperlyConfigured("AIODRF['LIFESPAN'] must resolve to a callable.")
-    if error := setting_error("LIFESPAN", value):
-        raise ImproperlyConfigured(error)
-    return value
 
 
 class AioDRFSettings(APISettings):
@@ -285,6 +221,10 @@ class AioDRFSettings(APISettings):
                 self._publish("_user_settings", value, started)
         if not isinstance(value, Mapping):
             raise ImproperlyConfigured("AIODRF must be a mapping of settings.")
+        # Raised, not ignored: a server does not run the system checks, and
+        # the setting would silently stop applying.
+        if error := moved_settings_error(value):
+            raise ImproperlyConfigured(error)
         return value
 
     def __getattr__(self, attr: str) -> Any:
@@ -300,8 +240,6 @@ class AioDRFSettings(APISettings):
         )
         if error := setting_error(attr, value):
             raise ImproperlyConfigured(error)
-        if attr == "LIFESPAN":
-            value = resolve_lifespan(value)
         if attr in self.import_strings:
             value = [
                 import_from_string(item, attr) if isinstance(item, str) else item

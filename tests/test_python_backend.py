@@ -14,10 +14,10 @@ from unittest import mock
 
 import pytest
 from django.test import override_settings
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from aiodrf.response import _plain_data
 from tests.testapp.models import Author, Book, Edition
 
@@ -42,7 +42,7 @@ def test_values_of_another_type_are_converted_by_drf():
     book = Book(pk=1, title=5, pages=True)
     expected = Plain(book).data
     assert expected == {"id": 1, "title": "5", "pages": 1}
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "python"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "python"}, AIODRF={}):
         assert aio.try_data(Plain(book)) == expected
 
 
@@ -58,7 +58,7 @@ def test_the_output_is_built_in_types_for_the_inline_renderer():
         book_id=1,
     )
     expected = Dated(edition).data
-    with override_settings(AIODRF=PYTHON):
+    with override_settings(FASTDRF=PYTHON, AIODRF={}):
         data = aio.try_data(Dated(edition))
     assert data == expected
     assert _plain_data(data)
@@ -68,8 +68,8 @@ def test_the_output_is_built_in_types_for_the_inline_renderer():
 def test_input_is_validated_by_drf():
     author = Author.objects.create(name="Ada")
     with (
-        override_settings(AIODRF=PYTHON),
-        mock.patch("aiodrf.contrib.inputs.recognize") as recognize,
+        override_settings(FASTDRF=PYTHON, AIODRF={}),
+        mock.patch("fastdrf.inputs.recognize") as recognize,
     ):
         serializer = Plain(data={"title": "t", "pages": 3})
         assert aio.try_is_valid(serializer) is True
@@ -88,13 +88,13 @@ def test_it_needs_neither_msgspec_nor_pydantic():
         settings.configure(
             INSTALLED_APPS=["django.contrib.contenttypes", "rest_framework", "aiodrf"],
             DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-            AIODRF={"SERIALIZER_BACKEND": "python", "SERIALIZER_BACKEND_FALLBACK": "error"},
+            FASTDRF={"SERIALIZER_BACKEND": "python", "SERIALIZER_BACKEND_FALLBACK": "error"},
         )
         django.setup()
         from django.contrib.contenttypes.models import ContentType
         from rest_framework import serializers
         from aiodrf import aio
-        from aiodrf.contrib import compiler
+        from fastdrf import compiler
 
         class Types(serializers.ModelSerializer):
             class Meta:
@@ -119,7 +119,7 @@ def test_it_needs_neither_msgspec_nor_pydantic():
 def test_the_check_needs_no_package_for_it():
     from aiodrf.checks import check_settings
 
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "python"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "python"}, AIODRF={}):
         assert not [
             error for error in check_settings(None) if error.id == "aiodrf.E004"
         ]

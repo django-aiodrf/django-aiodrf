@@ -123,6 +123,7 @@ async def test_unknown_parser_and_renderer_run_in_threads():
             "djangorestframework_camel_case.render.CamelCaseJSONRenderer"
         ],
     },
+    FASTDRF={},
 )
 async def test_declared_pure_they_run_on_the_loop():
     with count_hops() as hops:

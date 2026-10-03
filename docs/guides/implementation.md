@@ -219,7 +219,7 @@ In thread mode two cases are represented on the loop because they provably
 make no query. First, a model instance (of the serializer's model itself, not
 a subclass) whose static serializer class already compiled to an encoder that
 reads only columns through Django's descriptor
-(`contrib.compiler.loaded_encoder`), each of them loaded in the instance's
+(`fastdrf.compiler.loaded_encoder`), each of them loaded in the instance's
 `__dict__`.
 Second, DRF's own representation of model instances by a static serializer
 (`aio._loaded.reads_loaded`): its class's *read plan*, built once, lists what
@@ -237,7 +237,8 @@ object is far cheaper than a hop, but the cost of checking grows with the
 number of objects.
 
 aiodrf's `Response` renders on the event loop when the renderer is DRF's own
-`JSONRenderer`, aiodrf's msgspec renderer, or one declared pure
+`JSONRenderer`, django-fastdrf's msgspec renderer
+(`fastdrf.msgspec.renderers.MsgspecJSONRenderer`), or one declared pure
 (`INLINE_RENDERERS`): its `render` is marked as a coroutine function, so
 Django's async handler awaits it instead of hopping to a thread. For DRF's and
 the msgspec renderer, a structural check before encoding accepts only known
@@ -253,7 +254,9 @@ encoder class, so the same bytes). Lazy values,
 unknown subclasses and custom timezone callbacks select the worker; no
 application callback is run speculatively or retried. Synchronous callers
 still get a rendered response directly. A renderer the project declared pure
-renders inline, with no second attempt. Any other renderer, and any response
+renders inline, with no second attempt. A renderer registered with
+django-fastdrf's `register_data_renderer` is the project's code: it renders
+inline only when declared pure too. Any other renderer, and any response
 with post-render callbacks (`cache_page`), is rendered by Django as usual.
 This avoids an additional rendering adapter for eligible payloads; its effect
 depends on payload size and the application's concurrency.
@@ -321,13 +324,13 @@ iterator whole before answering, and warns. Use ASGI for live/infinite streams.
 
 `aiodrf.asgi.get_asgi_application()` wraps Django's application in one that
 answers the ASGI `lifespan` connection, which Django refuses: it sends
-`aiodrf.signals.asgi_startup` and `asgi_shutdown` (`Signal.asend_robust`, so
+`aiodrf_asgi_lifespan.signals.asgi_startup` and `asgi_shutdown` (`Signal.asend_robust`, so
 receivers may be `async def`) and reports a receiver's exception as a
 failed startup or shutdown with its traceback. Startup failure terminates the
 lifespan connection without waiting for a shutdown message. On servers supporting
 lifespan state, what a receiver puts in `scope["state"]` reaches every request as
 `request.scope["state"]`; servers may omit state support. aiodrf's optional
-resource context is separate: `AIODRF["LIFESPAN"]` accepts a zero-argument
+resource context is separate: `DJANGO_LIFESPAN` accepts a zero-argument
 async context manager factory or dotted path. The wrapper enters it before
 startup signals, publishes its yielded resource under a namespaced ASGI state
 key, and exits after shutdown signals, including failure and cancellation.
@@ -398,9 +401,9 @@ worker thread. django-mongodb-backend's is a no-op, and
 | synchronous-hook check (`hooks.require_sync_hooks`) | what a parser's or renderer's class defines is checked once per class (`class_cache`); a hook set on the instance is checked on every use |
 | `aio._classify._CLASS_KINDS` | serializers whose fields are a function of their class (`_classify.is_static`: DRF's declared fields and children, no field-building hooks, `Meta.depth` or model fields that call the project's code, usual arguments, nothing shadowed on the instance, nested serializers static too) and whose validators were not materialized; any other, or an instance whose fields were built (and perhaps edited, a nested serializer's included), is classified per instance; cleared on `setting_changed` |
 | compiled output and input variants | at most 1024 weak class buckets per cache and 32 dynamic variants per class; class and variant bounds enforced under their publication locks. Clearing detaches old buckets; `REST_FRAMEWORK` changes invalidate format-dependent entries |
-| schema serializers (per schema, and per input/output schema pair and model), partial schemas, list adapters | `contrib.typed.BoundedCache`, `SCHEMA_CACHE_SIZE` (1024) each: strong references, hits without a lock, built once per key under a lock, second-chance eviction |
+| schema serializers (per schema, and per input/output schema pair and model), partial schemas, list adapters | `fastdrf.typed.BoundedCache`, `fastdrf.typed.SCHEMA_CACHE_SIZE` (1024) each (django-fastdrf's): strong references, hits without a lock, built once per key under a lock, second-chance eviction |
 | a view's static serializer | resolved and checked against `ALLOWED_SERIALIZER_BACKENDS` when the URL is built (`APIView._compile_serializers`, `aiodrf.backends`); a class chosen per request is checked in `get_serializer` |
-| `contrib.builtin.prefetch._lookup_cache` | one owner for weak serializer/model keys, path values and the publication lock. Reads are unlocked; clearing replaces the table and snapshot identity rejects stale publication. `Meta.prefetch` is read from each request's serializer; request querysets are not cached |
+| `fastdrf.prefetch._lookup_cache` | one owner for weak serializer/model keys, path values and the publication lock. Reads are unlocked; clearing replaces the table and snapshot identity rejects stale publication. `Meta.prefetch` is read from each request's serializer; request querysets are not cached |
 | hop counter | an explicit block owns the counter and closes recording in `finally`; the `ContextVar` holds a weak reference. Recording and closing share a lock; `count` remains `len(calls)` |
 
 The [state-ownership reference](../architecture/state-ownership.md) explains
@@ -420,12 +423,12 @@ support as beta.
 ## 9. Compiled serializers
 
 See the [serializer guide](msgspec-pydantic.md). Output: one analysis
-(`contrib/compiler.py`) of the DRF serializer, turned into a msgspec Struct, a
-pydantic model or plain Python readers (`contrib/builtin/output.py`, the
+(`fastdrf/compiler.py`) of the DRF serializer, turned into a msgspec Struct, a
+pydantic model or plain Python readers (`fastdrf/output.py`, the
 dependency-free `"python"` backend) when the result is known to equal DRF's;
 DRF otherwise (`SERIALIZER_BACKEND_FALLBACK = "error"` raises instead for a
 serializer that cannot be compiled). An instance the compiled output cannot
-read is represented by DRF whatever the fallback. Input (`contrib/inputs.py`,
+read is represented by DRF whatever the fallback. Input (`fastdrf/inputs.py`,
 msgspec or pydantic; the python backend leaves input to DRF): a recognizer that
 accepts canonical input for which DRF would produce the same
 `validated_data`; on any rejection DRF validates and reports. A serializer

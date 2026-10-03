@@ -60,22 +60,47 @@ MATRIX = [
     ("6.1", "3.18"),
 ]
 TEST_DEPS = ["pytest", "pytest-django", "pytest-asyncio", "pytest-cov", "hypothesis"]
+
+
+# django-fastdrf, which aiodrf builds on; installed without its dependencies,
+# which each session pins. ``AIODRF_FASTDRF`` installs another source (a
+# checkout's path) before the floor is released.
+def package_source(variable, name, versions):
+    checkout = Path(__file__).parent / "forks" / name
+    return os.environ.get(
+        variable, str(checkout) if checkout.is_dir() else name + versions
+    )
+
+
+FASTDRF = package_source("AIODRF_FASTDRF", "django-fastdrf", ">=0.4,<0.5")
+LIFESPAN = package_source("AIODRF_LIFESPAN", "aiodrf-asgi-lifespan", ">=0.1,<0.2")
+ASYNC_CACHE = package_source("AIODRF_ASYNC_CACHE", "aiodrf-async-cache", ">=0.1,<0.2")
 OPTIONAL_DEPS = [
     "django-tasks>=0.12,<0.13",
     "drf-spectacular",
     "django-filter",
     "msgspec",
     "pydantic",
+    "orjson",
     "libcst",
     "opentelemetry-api",
+    # The drivers of aiodrf-async-cache, which is installed without its
+    # dependencies.
+    "redis>=5.0.1",
 ]
 ECOSYSTEM_REQUIREMENTS = "requirements/ecosystem/requirements.txt"
 ECOSYSTEM_SUPPORT_REQUIREMENTS = "requirements/support/requirements.txt"
 PYTEST = ["pytest", "-W", "error"]
 
 
-def install(session, *requirements):
-    session.install(*requirements, *TEST_DEPS, *OPTIONAL_DEPS)
+def install(session, *requirements, without=()):
+    optional = [
+        dependency
+        for dependency in OPTIONAL_DEPS
+        if not dependency.startswith(tuple(without))
+    ]
+    session.install(*requirements, *TEST_DEPS, *optional)
+    session.install(FASTDRF, LIFESPAN, ASYNC_CACHE, "--no-deps")
     session.install("-e", ".", "--no-deps")
 
 
@@ -143,12 +168,14 @@ def tests_minimum(session):
         "django-filter==25.1",
         "msgspec==0.19.0",
         "pydantic==2.9.0",
+        "orjson==3.11.0",
         "libcst==1.4.0",
         "opentelemetry-api==1.27.0",
         # Not a floor: lets the cache codec tests run against the floors above.
         "redis",
         *TEST_DEPS,
     )
+    session.install(FASTDRF, LIFESPAN, ASYNC_CACHE, "--no-deps")
     session.install("-e", ".", "--no-deps")
     session.run(*PYTEST, *session.posargs)
 
@@ -186,6 +213,7 @@ def drf_parity(session, django, drf):
         "importlib-metadata",
         "pytz",
     )
+    session.install(FASTDRF, LIFESPAN, ASYNC_CACHE, "--no-deps")
     session.install("-e", ".", "--no-deps")
     version = session.run(
         "python",
@@ -248,7 +276,11 @@ def example(session):
 
 @nox.session(python="3.14t")
 def tests_freethreaded(session):
-    install(session, "django~=6.1.0", "djangorestframework~=3.18.0")
+    # orjson publishes no free-threaded wheel, and does not build for 3.14t;
+    # its tests skip without it.
+    install(
+        session, "django~=6.1.0", "djangorestframework~=3.18.0", without=("orjson",)
+    )
     # An extension module that does not declare free-threading support turns
     # the GIL back on with a RuntimeWarning, which ``-W error`` makes an
     # error. (``PYTHON_GIL=0`` would keep the GIL off and hide it.)
@@ -611,6 +643,7 @@ def build_wheel(session):
         "core",
         "msgspec",
         "pydantic",
+        "orjson",
         "spectacular",
         "filter",
         "codemod",
@@ -618,8 +651,7 @@ def build_wheel(session):
         "tasks",
         "whitenoise",
         "granian",
-        "valkey",
-        "redis",
+        "lifespan",
         "opensearch",
         "async-backend",
     ],
@@ -634,7 +666,9 @@ def distribution(session, extra):
 @nox.session(python="3.14")
 def consumer(session):
     project, wheel = build_wheel(session)
-    session.install(str(wheel), "mypy", "django-stubs", "djangorestframework-stubs")
+    session.install(
+        str(wheel), LIFESPAN, "mypy", "django-stubs", "djangorestframework-stubs"
+    )
     session.chdir(session.create_tmp())
     command = [
         "mypy",

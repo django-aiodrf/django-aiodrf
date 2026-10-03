@@ -79,12 +79,13 @@ def application(database, journal, *, initialize_database=True):
         DEFAULT_AUTO_FIELD="django.db.models.AutoField",
     )
     django.setup()
+    from aiodrf_asgi_lifespan.asgi import get_lifespan_state
     from django.db import connection
     from django.urls import path
     from rest_framework import generics as drf_generics
     from rest_framework import serializers
 
-    from aiodrf.asgi import get_asgi_application, get_lifespan_state
+    from aiodrf.asgi import get_asgi_application
     from aiodrf.generics import ListAPIView
     from aiodrf.response import EventStreamResponse, Response
     from aiodrf.utils import run_sync

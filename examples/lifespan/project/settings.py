@@ -38,4 +38,4 @@ REST_FRAMEWORK = {
 }
 MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
 AIODRF = {}
-AIODRF = {"LIFESPAN": "demo.lifecycle.lifespan"}
+DJANGO_LIFESPAN = "demo.lifecycle.lifespan"

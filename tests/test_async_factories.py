@@ -175,7 +175,7 @@ async def test_dynamic_async_factory_checks_backend_allowlist():
     from django.core.exceptions import ImproperlyConfigured
 
     with (
-        override_settings(AIODRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]}),
+        override_settings(FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]}, AIODRF={}),
         pytest.raises(ImproperlyConfigured, match="msgspec"),
     ):
         await View().aget_serializer(context={})

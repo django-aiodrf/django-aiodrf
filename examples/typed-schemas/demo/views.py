@@ -5,10 +5,10 @@ import pydantic
 from django.urls import path
 from drf_spectacular.utils import extend_schema
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from fastdrf.msgspec.parsers import MsgspecJSONParser
+from fastdrf.msgspec.renderers import MsgspecJSONRenderer
 
 from aiodrf import aio, generics, serializers
-from aiodrf.contrib.msgspec.parsers import MsgspecJSONParser
-from aiodrf.contrib.msgspec.renderers import MsgspecJSONRenderer
 from aiodrf.contrib.msgspec.serializers import MsgspecSerializer
 from aiodrf.contrib.pydantic.serializers import PydanticSerializer
 from aiodrf.response import Response

@@ -1,5 +1,5 @@
 """
-``AIODRF["CACHE_SERIALIZER_FIELDS"]``: a ModelSerializer class builds its
+``FASTDRF["CACHE_SERIALIZER_FIELDS"]``: a ModelSerializer class builds its
 fields once, and each instance gets a deep copy of them, the way DRF already
 copies declared fields. Everything a serializer produces must be what DRF's
 per-instance build produces.
@@ -20,13 +20,13 @@ from django.test import override_settings
 from django.test.utils import isolate_apps
 from django.urls import path
 from django.utils.choices import CallableChoiceIterator
+from fastdrf._classify import _model_fields_call_code
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from rest_framework import serializers as drf_serializers
 from rest_framework.test import APIRequestFactory
 
 from aiodrf import serializers
-from aiodrf.aio._classify import _model_fields_call_code
 from tests.test_threads import race
 from tests.testapp.models import Author, Book, Edition, Invoice, Seat, Shipment, Tag
 
@@ -186,9 +186,9 @@ def _types(serializer):
 
 def both(cls, *args, **kwargs):
     """The outcome with DRF's build, and with the cached template (second instance)."""
-    with override_settings(AIODRF=OFF):
+    with override_settings(FASTDRF=OFF, AIODRF={}):
         drf = outcome(cls, *args, **kwargs)
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         outcome(cls, *args, **kwargs)
         cached = outcome(cls, *args, **kwargs)
     return drf, cached
@@ -253,7 +253,7 @@ def test_partial_update_matches_drf(rows):
 
 
 def test_fields_are_built_once_per_class(rows):
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         for _ in range(3):
             BookDetailSerializer(rows["book"]).data  # noqa: B018
         BookSerializer(Book.objects.all(), many=True).data  # noqa: B018
@@ -275,7 +275,7 @@ def test_off_by_default_builds_per_instance(rows):
 
 
 def test_an_instance_edit_does_not_leak(rows):
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         edited = BookSerializer(rows["book"])
         edited.fields["title"].validators.append(lambda value: None)
         edited.fields["pages"].read_only = True
@@ -312,7 +312,7 @@ def test_validators_are_shared_as_drf_shares_declared_fields():
     assert one.validators is not two.validators
     assert set(sharing(one, two)) == {(True, True), (False, False)}
 
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         one, two = BookSerializer().fields["isbn"], BookSerializer().fields["isbn"]
     assert one.validators is not two.validators
     # ``UniqueValidator`` (from ``unique=True``), then ``MaxLengthValidator``.
@@ -353,7 +353,7 @@ def test_relations_built_by_drf_keep_the_models_manager():
             model = Item
             fields = ["shelf", "shelves"]
 
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         one, two = Items().fields, Items().fields
     assert one["shelf"] is not two["shelf"]
     assert one["shelf"].queryset is two["shelf"].queryset is Shelf.objects
@@ -388,20 +388,20 @@ class Deep(serializers.ModelSerializer):
     "cls", [GetFieldsOverride, BuildFieldOverride, InitOverride, Deep]
 )
 def test_dynamic_classes_build_per_instance(rows, cls):
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         for _ in range(2):
             cls(rows["book"]).data  # noqa: B018
     assert built.count(cls) == 2
 
 
 def test_context_reaches_a_get_fields_override():
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert GetFieldsOverride(context={"locked": True}).fields["title"].read_only
         assert not GetFieldsOverride().fields["title"].read_only
 
 
 def test_instance_attributes_that_shape_fields_are_honoured():
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         BookSerializer().fields  # noqa: B018 -- the template exists
         serializer = BookSerializer()
         serializer.Meta = type("Meta", (), {"model": Author, "fields": ["name"]})
@@ -415,14 +415,17 @@ def test_plain_drf_serializers_are_not_changed():
             model = Author
             fields = ["id", "name"]
 
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         Plain().fields  # noqa: B018
         Plain().fields  # noqa: B018
     assert built == [Plain, Plain]
 
 
 def test_settings_changes_rebuild(rows):
-    with override_settings(AIODRF=ON, ROOT_URLCONF=URLS), counting_builds() as built:
+    with (
+        override_settings(FASTDRF=ON, AIODRF={}, ROOT_URLCONF=URLS),
+        counting_builds() as built,
+    ):
         assert "url" in AuthorLinkSerializer().fields
         with override_settings(REST_FRAMEWORK={"URL_FIELD_NAME": "link"}):
             fields = AuthorLinkSerializer().fields
@@ -445,12 +448,14 @@ def test_racing_first_builds_match_drf():
         serializer.fields["title"].read_only = True
         return repr(serializer)
 
-    with override_settings(AIODRF=OFF):
+    with override_settings(FASTDRF=OFF, AIODRF={}):
         expected = work()
         edited = edit()
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         results = race(work)
-        with override_settings(AIODRF=ON):  # a fresh template, raced by editors
+        with override_settings(
+            FASTDRF=ON, AIODRF={}
+        ):  # a fresh template, raced by editors
             edits = race(edit)
         assert work() == expected
     assert results == [expected] * len(results)
@@ -563,7 +568,7 @@ def test_a_callable_limit_choices_to_is_called_for_every_serializer(
 ):
     scoped_by(monkeypatch, lambda: {"pk": allowed.get()})
     cls = type("Scoped", (BookAuthor,), {"__module__": __name__})
-    with override_settings(AIODRF=cache):
+    with override_settings(FASTDRF=cache, AIODRF={}):
         if warm:
             with allowing(0):
                 assert not accepts(cls, authors[0].pk)
@@ -588,7 +593,7 @@ def test_a_limit_choices_to_applied_through_the_projects_manager(
     manager.model = Author
     monkeypatch.setitem(vars(Author._meta), "default_manager", manager)
     cls = type("Managed", (BookAuthor,), {"__module__": __name__})
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         for current, other in (authors, authors[::-1]):
             with allowing(current.pk):
                 assert accepts(cls, current.pk)
@@ -605,9 +610,9 @@ def test_concurrent_scopes_each_get_their_own(monkeypatch, model_rules, authors)
             return str(cls().fields["author"].get_queryset().query)
 
     pks = [author.pk for author in authors] * 4
-    with override_settings(AIODRF=OFF):
+    with override_settings(FASTDRF=OFF, AIODRF={}):
         expected = [queryset(pk) for pk in pks]
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert race(queryset, [(pk,) for pk in pks]) == expected
     assert expected[0] != expected[1]
 
@@ -625,7 +630,7 @@ def test_a_model_field_class_of_the_projects_builds_per_instance(
 ):
     monkeypatch.setattr(Author._meta.get_field("name"), "__class__", Limited)
     cls = type("Named", (AuthorSerializer,), {"__module__": __name__})
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         for limit, valid in ((3, False), (10, True), (3, False)):
             with allowing(limit):
                 assert cls(data={"name": "Alice"}).is_valid() is valid
@@ -638,7 +643,7 @@ def test_callable_choices_build_per_instance(monkeypatch, model_rules):
         field, "choices", CallableChoiceIterator(lambda: [(allowed.get(),) * 2])
     )
     cls = type("Chosen", (AuthorSerializer,), {"__module__": __name__})
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         for current, other in (("Alice", "Bob"), ("Bob", "Alice")):
             with allowing(current):
                 assert cls(data={"name": current}).is_valid()
@@ -661,7 +666,7 @@ def test_a_field_class_of_the_projects_is_instantiated_for_every_copy(model_rule
             models.CharField: ScopedCharField,
         }
 
-    with override_settings(AIODRF=ON), counting_builds() as built:
+    with override_settings(FASTDRF=ON, AIODRF={}), counting_builds() as built:
         for limit, valid in ((3, False), (10, True), (3, False)):
             with allowing(limit):
                 assert Mapped(data={"name": "Alice"}).is_valid() is valid
@@ -670,8 +675,9 @@ def test_a_field_class_of_the_projects_is_instantiated_for_every_copy(model_rule
 
 def test_every_list_of_field_building_hooks_includes_drfs():
     # One table of DRF's field-building hooks; the other lists add to it.
-    from aiodrf.aio._classify import _BUILD_HOOKS, _FIELD_HOOKS
-    from aiodrf.contrib.builtin.field_cache import _FIELD_STATE
+    from fastdrf._classify import _BUILD_HOOKS
+    from fastdrf._field_cache import _FIELD_STATE
+    from fastdrf._inspection import _FIELD_HOOKS
 
     assert set(_FIELD_HOOKS) <= set(_BUILD_HOOKS)
     assert set(_FIELD_HOOKS) <= _FIELD_STATE

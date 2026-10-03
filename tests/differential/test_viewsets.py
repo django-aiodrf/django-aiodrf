@@ -24,6 +24,7 @@ from django.db import transaction
 from django.test import override_settings
 from django.urls import include, path
 from django_filters.rest_framework import DjangoFilterBackend
+from fastdrf import compiler
 from rest_framework import filters, pagination, routers
 from rest_framework import serializers as drf_serializers
 from rest_framework import viewsets as drf_viewsets
@@ -32,8 +33,8 @@ from rest_framework.permissions import AllowAny
 
 from aiodrf import serializers as aiodrf_serializers
 from aiodrf import viewsets as aiodrf_viewsets
-from aiodrf.contrib import compiler
 from aiodrf.test import APIClient, AsyncAPIClient
+from tests.profiles import split_settings
 from tests.testapp.models import Author, Book, Edition, Tag
 
 PROFILES = {
@@ -401,7 +402,8 @@ def test_aiodrf_answers_as_drf(profile, paginator):
     compiler._compiled_by_class.clear()
     client = APIClient()
     compared = 0
-    with override_settings(AIODRF=PROFILES[profile]):
+    aiodrf, fastdrf = split_settings(PROFILES[profile])
+    with override_settings(AIODRF=aiodrf, FASTDRF=fastdrf):
         cases = fixtures()
         for method, url, data in cases:
             reference = observe(client, method, f"/drf/{paginator}/", url, data)
@@ -421,7 +423,8 @@ async def test_aiodrf_answers_as_drf_through_asgi(profile):
     # The deployed path: Django's async handler. Requests that write are
     # compared through the other test, which rolls each one back.
     client = AsyncAPIClient()
-    with override_settings(AIODRF=PROFILES[profile]):
+    aiodrf, fastdrf = split_settings(PROFILES[profile])
+    with override_settings(AIODRF=aiodrf, FASTDRF=fastdrf):
         cases = await sync_to_async(fixtures)()
         for method, url, data in cases:
             if method not in READS or url.endswith("boom/"):

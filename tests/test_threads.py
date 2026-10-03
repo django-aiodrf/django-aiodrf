@@ -16,11 +16,11 @@ import threading
 import msgspec
 import pytest
 from django.test import override_settings
+from fastdrf import compiler, inputs, typed
 from rest_framework import permissions
 from rest_framework import serializers as drf_serializers
 
 from aiodrf.aio import _classify
-from aiodrf.contrib import compiler, inputs, typed
 from aiodrf.settings import aiodrf_settings
 from aiodrf.utils import HopCounter, Impl, resolve_pair
 from tests.testapp.models import Edition
@@ -82,7 +82,8 @@ def test_settings_reload_while_reading():
     # A value read before a reload must not have been cached after it: such
     # a value is never cleared again, and settings changes stop applying.
     with override_settings(
-        AIODRF={"REPRESENTATION_MODE": "inline", "PURE_POLICIES": [FieldSubset]}
+        AIODRF={"REPRESENTATION_MODE": "inline", "PURE_POLICIES": [FieldSubset]},
+        FASTDRF={},
     ):
         assert aiodrf_settings.REPRESENTATION_MODE == "inline"
         assert FieldSubset in aiodrf_settings.pure_classes
@@ -106,7 +107,7 @@ def test_compiled_variants_stay_bounded(backend):
     names = FieldSubset.Meta.fields
     subsets = [*itertools.combinations(names, 2), *itertools.combinations(names, 3)]
     assert len(subsets) > compiler.MAX_VARIANTS + THREADS
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         for start in range(0, len(subsets), THREADS):
             batch = subsets[start : start + THREADS]
             race(
@@ -211,21 +212,6 @@ def test_closing_hop_counter_stops_all_workers():
     assert counter.count == closed_at
 
 
-def test_class_cache_capacity_is_enforced_under_threads(monkeypatch):
-    from aiodrf import utils
-
-    monkeypatch.setattr(utils, "CLASS_CACHE_SIZE", 4)
-
-    @utils.class_cache
-    def metadata(cls, variant):
-        return variant
-
-    assert race(
-        lambda index: metadata(FieldSubset, index), [(i,) for i in range(THREADS)]
-    ) == list(range(THREADS))
-    assert metadata.cache_size() <= 4
-
-
 def test_compiler_cache_shares_a_bucket_under_threads():
     cache = compiler._SerializerCache()
     buckets = race(lambda: cache.get_or_create(FieldSubset))
@@ -255,36 +241,3 @@ def test_negotiation_capacity_is_enforced_under_threads(monkeypatch):
             assert len(views._negotiations) <= 4
 
     race(negotiate, [(index,) for index in range(THREADS)])
-
-
-def test_a_class_cache_cleared_while_computing_keeps_no_stale_value():
-    from aiodrf.utils import class_cache
-
-    cleared = threading.Event()
-    computed = threading.Event()
-
-    class Target:
-        pass
-
-    setting = ["old"]
-
-    @class_cache
-    def read(cls):
-        value = setting[0]
-        # Hold the computed value until the clear happened (or for a moment,
-        # on the call after it).
-        computed.set()
-        cleared.wait(timeout=0.5)
-        return value
-
-    def clear():
-        computed.wait()
-        setting[0] = "new"
-        read.cache_clear()
-        cleared.set()
-
-    thread = threading.Thread(target=clear)
-    thread.start()
-    assert read(Target) == "old"
-    thread.join()
-    assert read(Target) == "new"

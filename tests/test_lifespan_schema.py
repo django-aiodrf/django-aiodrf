@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from io import StringIO
 from types import ModuleType
 
+from aiodrf_asgi_lifespan.asgi import LifespanApplication, get_lifespan_state
 from django.core.management import call_command
 from django.test import override_settings
 from rest_framework import serializers
 from rest_framework.decorators import action
 
-from aiodrf.asgi import LifespanApplication, get_lifespan_state
 from aiodrf.response import Response
 from aiodrf.routers import SimpleRouter
 from aiodrf.utils import run_sync
@@ -82,7 +82,9 @@ async def test_offline_schema_matches_active_and_closed_lifespans_without_openin
         call_command("check", tags=["compatibility"], stdout=StringIO())
         return json.loads(out.getvalue())
 
-    with override_settings(ROOT_URLCONF=urls, AIODRF={"LIFESPAN": lifespan}):
+    with override_settings(
+        ROOT_URLCONF=urls, AIODRF={}, DJANGO_LIFESPAN=lifespan, FASTDRF={}
+    ):
         before = await run_sync(schema)()
         assert events == []
         from django.core.asgi import get_asgi_application

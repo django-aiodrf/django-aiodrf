@@ -13,11 +13,11 @@ import enum
 
 import pytest
 from django.test import override_settings
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 from rest_framework.renderers import JSONRenderer
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from tests.testapp.models import Author, Book, Edition
 
 BACKENDS = ["msgspec", "pydantic", "python"]
@@ -38,7 +38,7 @@ def outcome(produce):
 def assert_as_drf(backend, factory):
     drf = outcome(lambda: factory().data)
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         assert compiler.compiled_for(factory()) is not None
         compiled = outcome(lambda: aio.try_data(factory()))
     assert compiled == drf

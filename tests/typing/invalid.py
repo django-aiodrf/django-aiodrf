@@ -1,8 +1,8 @@
 """All five calls must fail type checking; Any must not make this pass."""
 
+from aiodrf_asgi_lifespan.asgi import LifespanApplication, get_lifespan_state
 from django.http import HttpRequest
 
-from aiodrf.asgi import LifespanApplication, get_lifespan_state
 from aiodrf.response import StreamingResponse
 from aiodrf.serializers import Serializer
 

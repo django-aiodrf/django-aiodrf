@@ -10,10 +10,10 @@ import zoneinfo
 import pytest
 from django.test import override_settings
 from django.utils import timezone
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from tests.testapp.models import Edition
 
 BACKENDS = ["msgspec", "pydantic", "python"]
@@ -82,7 +82,7 @@ def compare(backend, serializer_factory, parities=("fast", "strict")):
             "SERIALIZER_BACKEND_PARITY": parity,
             "SERIALIZER_BACKEND_FALLBACK": "error",
         }
-        with override_settings(AIODRF=settings):
+        with override_settings(FASTDRF=settings, AIODRF={}):
             compiled = outcome(lambda: aio.try_data(serializer_factory()))
         assert compiled == drf, parity
     return compiled

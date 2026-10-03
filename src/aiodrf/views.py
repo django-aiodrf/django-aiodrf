@@ -20,14 +20,14 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 from asgiref.sync import async_to_sync
-from django.core.handlers.asgi import ASGIRequest
-from django.core.handlers.wsgi import WSGIRequest
 from django.http import HttpRequest, HttpResponseBase
 from django.utils import timezone
 from django.utils.cache import get_conditional_response
 from django.utils.functional import classproperty
 from django.utils.http import http_date, parse_header_parameters, quote_etag
 from django.views.generic import View
+from fastdrf.response import DataResponse
+from fastdrf.views import _accept_header, _is_drf_negotiation, _query_param
 from rest_framework import exceptions, permissions, serializers, status, views
 from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.request import Request as DRFRequest
@@ -40,13 +40,12 @@ from rest_framework.views import (  # noqa: F401
 from aiodrf import aio, policies
 from aiodrf.aio._classify import is_declarative_class
 from aiodrf.backends import compile_serializer
-from aiodrf.compat import DJANGO_HAS_QUERY, DRF_ACCEPT_FROM_HEADERS
+from aiodrf.compat import DJANGO_HAS_QUERY
 from aiodrf.exceptions import PreconditionFailed
 from aiodrf.hooks import check_view_hooks, require_sync_hooks
 from aiodrf.policies import Mode
 from aiodrf.request import Request
 from aiodrf.response import (
-    DataResponse,
     Response,
     aresolve_data_response,
     resolve_data_response,
@@ -130,45 +129,6 @@ _DRF_NEGOTIATION = (
 )
 
 
-def _is_drf_negotiation(negotiator: Any) -> bool:
-    """DRF's negotiation, unchanged: no subclass, patch or instance attribute."""
-    cls = type(negotiator)
-    return (
-        cls is DefaultContentNegotiation
-        and not negotiator.__dict__
-        and (cls.select_renderer, cls.filter_renderers, cls.get_accept_list)
-        == _DRF_NEGOTIATION
-    )
-
-
-def _accept_header(request: Any, project_code_ran: Any) -> str:
-    """
-    The header DRF's ``get_accept_list`` reads: ``request.headers.get("accept",
-    "*/*")`` (DRF 3.18), without building Django's ``headers`` for it: until
-    they are built, they would be read from ``META``, which DRF read before.
-    ``headers`` of DRF's request, on its class or set on it, are what DRF
-    reads instead. Only a project's code can have set them
-    (``project_code_ran``, see ``_negotiation``), and the request is asked
-    only then: reading its ``__dict__`` slows down every later attribute
-    access to it.
-    """
-    if not DRF_ACCEPT_FROM_HEADERS:
-        return request.META.get("HTTP_ACCEPT", "*/*")
-    django_request = request._request
-    if (
-        "headers" not in django_request.__dict__
-        and type(django_request).headers is HttpRequest.headers
-        and not hasattr(type(request), "headers")
-        and not (
-            (project_code_ran or type(request) not in _FRAMEWORK_REQUESTS)
-            and "headers" in request.__dict__
-        )
-    ):
-        return django_request.META.get("HTTP_ACCEPT", "*/*")
-    return request.headers.get("accept", "*/*")
-
-
-_FRAMEWORK_REQUESTS = frozenset({Request, DRFRequest})
 # Where a project's code runs between building DRF's request and negotiating.
 _BEFORE_NEGOTIATION_HOOKS = (
     "dispatch",
@@ -189,23 +149,6 @@ def _negotiation(view_class: Any) -> Any:
     if user_defines(view_class, *_CONTENT_NEGOTIATION_HOOKS):
         return None
     return user_defines(view_class, *_BEFORE_NEGOTIATION_HOOKS)
-
-
-# Django's requests build ``GET`` from ``QUERY_STRING`` when it is first read.
-_LAZY_GET = (ASGIRequest.__dict__["GET"], WSGIRequest.__dict__["GET"])
-
-
-def _query_param(request: Any, name: Any) -> str | None:
-    """``request.query_params.get(name)``; an empty query string needs no ``QueryDict``."""
-    django_request = request._request
-    if (
-        not django_request.META.get("QUERY_STRING")
-        and "GET" not in django_request.__dict__
-        and type(django_request).GET in _LAZY_GET
-        and type(request).query_params is DRFRequest.query_params
-    ):
-        return None
-    return request.query_params.get(name)
 
 
 _EXCEPTION_HOOKS = (

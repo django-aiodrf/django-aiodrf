@@ -5,6 +5,7 @@ from django.db import connections
 from django.test import override_settings
 
 from aiodrf.utils import run_sync
+from tests.profiles import split_settings
 
 
 @pytest.fixture(autouse=True)
@@ -17,15 +18,20 @@ def _clear_cache():
 @pytest.fixture(autouse=True)
 def _aiodrf_settings(request):
     """
-    The ``AIODRF`` values a test verifies (``pytest.mark.aiodrf_settings``),
-    over those of the run, so that a run with another profile
-    (``AIODRF_TEST_PROFILE``) still tests them.
+    The values a test verifies (``pytest.mark.aiodrf_settings``), over those
+    of the run, so that a run with another profile (``AIODRF_TEST_PROFILE``)
+    still tests them: django-fastdrf's go to ``FASTDRF``, the others to
+    ``AIODRF``.
     """
     marker = request.node.get_closest_marker("aiodrf_settings")
     if marker is None:
         yield
         return
-    with override_settings(AIODRF={**getattr(settings, "AIODRF", {}), **marker.kwargs}):
+    aiodrf, fastdrf = split_settings(marker.kwargs)
+    with override_settings(
+        AIODRF={**getattr(settings, "AIODRF", {}), **aiodrf},
+        FASTDRF={**getattr(settings, "FASTDRF", {}), **fastdrf},
+    ):
         yield
 
 

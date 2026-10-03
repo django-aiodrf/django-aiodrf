@@ -5,21 +5,21 @@ of that behaviour for speed. Together they form the *tuned profile*, the
 configuration aiodrf's benchmarks use to measure its fastest setup:
 
 ```python
-AIODRF = {
+FASTDRF = {  # django-fastdrf's optimizations, which aiodrf builds on
     "SERIALIZER_BACKEND": "msgspec",
     "SERIALIZER_BACKEND_PARITY": "strict",
     "SERIALIZER_BACKEND_FALLBACK": "error",
     "CACHE_SERIALIZER_FIELDS": True,
     "FIELD_COPY_MODE": "compiled",
+}
+AIODRF = {
     "REPRESENTATION_MODE": "inline",
     "REQUEST_THREADS": 32,
 }
 REST_FRAMEWORK = {
-    "DEFAULT_RENDERER_CLASSES": [
-        "aiodrf.contrib.msgspec.renderers.MsgspecJSONRenderer"
-    ],
+    "DEFAULT_RENDERER_CLASSES": ["fastdrf.msgspec.renderers.MsgspecJSONRenderer"],
 }
-# Views return aiodrf.response.DataResponse instead of Response.
+# Views return fastdrf.response.DataResponse instead of Response.
 ```
 
 Each option is independent of the others. Enable them one at a time and run
@@ -28,17 +28,17 @@ how it differs from DRF, where it does not apply and what can go wrong.
 
 ## Where each option can be set
 
-| Option | Project (`AIODRF`) | View | Serializer (`Meta`) | Notes |
+| Option | Project setting | View | Serializer (`Meta`) | Notes |
 | --- | :-: | :-: | :-: | --- |
-| `SERIALIZER_BACKEND` | yes | — | `serializer_backend` | Limited by `ALLOWED_SERIALIZER_BACKENDS` |
-| `SERIALIZER_BACKEND_PARITY` | yes | — | — | Project-wide only |
-| `SERIALIZER_BACKEND_FALLBACK` | yes | — | `serializer_backend_fallback` | |
-| `CACHE_SERIALIZER_FIELDS` | yes | `serializer_field_cache` | `cache_fields` | A serializer's `Meta` takes precedence over the view |
-| `FIELD_COPY_MODE` | yes | `serializer_field_copy_mode` | `field_copy_mode` | Requires the field cache |
-| `REPRESENTATION_MODE` | yes | — | — | Project-wide only |
+| `SERIALIZER_BACKEND` | `FASTDRF` | — | `serializer_backend` | Limited by `ALLOWED_SERIALIZER_BACKENDS` |
+| `SERIALIZER_BACKEND_PARITY` | `FASTDRF` | — | — | Project-wide only |
+| `SERIALIZER_BACKEND_FALLBACK` | `FASTDRF` | — | `serializer_backend_fallback` | |
+| `CACHE_SERIALIZER_FIELDS` | `FASTDRF` | `serializer_field_cache` | `cache_fields` | A serializer's `Meta` takes precedence over the view |
+| `FIELD_COPY_MODE` | `FASTDRF` | `serializer_field_copy_mode` | `field_copy_mode` | Requires the field cache |
+| `REPRESENTATION_MODE` | `AIODRF` | — | — | Project-wide only |
 | `MsgspecJSONRenderer` | `DEFAULT_RENDERER_CLASSES` (DRF) | `renderer_classes` | — | |
 | `DataResponse` | — | returned by the handler | — | Per response |
-| `REQUEST_THREADS` | yes | — | — | Process-wide; used only by `aiodrf.asgi.get_asgi_application()` |
+| `REQUEST_THREADS` | `AIODRF` | — | — | Process-wide; used only by `aiodrf.asgi.get_asgi_application()` |
 
 `SERIALIZER_BACKEND_PARITY` and `REPRESENTATION_MODE` cannot be limited to a
 view or a serializer. If only some endpoints should represent on the event
@@ -50,9 +50,10 @@ the event loop when it can prove that no query is needed (see
 
 `SERIALIZER_BACKEND`, `SERIALIZER_BACKEND_PARITY`, `SERIALIZER_BACKEND_FALLBACK`
 
-**What it does.** aiodrf compiles a serializer's output, and the validation of
-well-formed input, to msgspec or Pydantic when the result is known to be
-identical to DRF's. `SERIALIZER_BACKEND = "python"` compiles the same output
+**What it does.** django-fastdrf compiles a serializer's output, and the
+validation of well-formed input, to msgspec or Pydantic when the result is known to be
+identical to DRF's; aiodrf runs the compiled code in its async paths.
+`SERIALIZER_BACKEND = "python"` compiles the same output
 without either library, and leaves input to DRF. The [serializer backend guide](msgspec-pydantic.md) explains
 the details.
 
@@ -66,7 +67,9 @@ file fields, primary keys and slugs of forward and to-many relations, dotted
 sources through foreign keys that cannot be null, and nested serializers for
 forward and to-many relations. It leaves other fields to DRF, among them JSON,
 method and custom fields, and serializers that define their own
-`to_representation`. The [output section](msgspec-pydantic.md#output)
+`to_representation`, unless the fields are registered with
+`fastdrf.registry` or delegated (`FASTDRF["DELEGATE_FIELDS"]`, which runs
+them with their own code inside the compiled output). The [output section](msgspec-pydantic.md#output)
 of the serializer guide has the complete list. msgspec or Pydantic must be
 installed for their backends.
 
@@ -147,7 +150,7 @@ installed.
 
 ## `DataResponse`
 
-**What it does.** A handler returns `aiodrf.response.DataResponse(data, status,
+**What it does.** A handler returns `fastdrf.response.DataResponse(data, status,
 headers, content_type)` instead of DRF's `Response`. The view renders it
 immediately with DRF's JSON renderer and returns a Django `HttpResponse` with
 the same status, content and headers DRF would produce.
@@ -161,7 +164,8 @@ sent. In tests, read the content with `response.json()`.
 **Limitations.** When the negotiated renderer is not a JSON renderer (the
 browsable API, templates), or when the view defines `finalize_response`, the
 view converts it to a regular DRF `Response`, with no speed benefit. Returned by
-a view that is not an aiodrf view, its content raises `ContentNotRenderedError`.
+a view that is neither an aiodrf view nor uses django-fastdrf's
+`DataResponseMixin`, its content raises `ContentNotRenderedError`.
 
 **Risks.** Middleware, decorators or tests that read `response.data` or other
 `Response` attributes.

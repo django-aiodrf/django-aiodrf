@@ -28,6 +28,7 @@ from inspect import iscoroutinefunction
 from typing import Any, Protocol, TypeVar, cast
 
 from asgiref.sync import async_to_sync, sync_to_async
+from fastdrf.utils import class_cache as _class_cache
 
 from aiodrf.settings import aiodrf_settings
 
@@ -257,92 +258,18 @@ class ClassCached(Protocol[T_co]):
     def cache_size(self) -> int: ...
 
 
-# Per decorated function, including field-template and copy-plan caches.
-# Weak keys alone cannot collect a class captured by a cached validator or
-# argument. Periodic capacity eviction also bounds those reference cycles.
-CLASS_CACHE_SIZE = 1024
-
-
-def _forget(
-    cache: dict[int, Any], key: int, reference: weakref.ReferenceType[type]
-) -> None:
-    # Called by the garbage collector, possibly while the cache's lock is
-    # held on this thread: no lock here. A newer entry under the same key
-    # (another class) stays.
-    entry = cache.get(key)
-    if entry is not None and entry[0] is reference:
-        cache.pop(key, None)
-
-
 def class_cache[T](func: Callable[..., T]) -> ClassCached[T]:
     """
-    Memoize class metadata with weak keys and bounded publication.
+    Memoize class metadata with weak keys and bounded publication:
+    django-fastdrf's ``class_cache``, which maintains it, with its type.
 
     ``functools.cache`` holds a strong reference to every class it has seen.
     DRF creates classes at request time (``Meta.depth`` builds a nested
     serializer class for each serializer instance), so such a cache would
-    grow with every request. Values or arguments can refer back to their
-    class; at most ``CLASS_CACHE_SIZE`` entries are published before eviction.
-    This bounds such cycles without modifying application classes. Hits do
-    not acquire the publication lock or maintain a recency list.
+    grow with every request. At most ``fastdrf.utils.CLASS_CACHE_SIZE``
+    entries are published before eviction.
     """
-    # Keyed by the class's identity, which a plain dict looks up at C speed;
-    # the weak reference tells a live class from a later one that reused the
-    # identity, and forgets the entry when the class goes away.
-    cache: dict[int, tuple[weakref.ref[type], dict[tuple[Any, ...], T]]] = {}
-    generation = 0
-    published = 0
-    lock = threading.Lock()
-
-    @functools.wraps(func)
-    def wrapper(cls: type, *args: Any) -> T:
-        nonlocal published
-        entry = cache.get(id(cls))
-        if entry is not None and entry[0]() is cls:
-            try:
-                return entry[1][args]
-            except KeyError:
-                pass
-        # Computed without the lock: results are deterministic, so racing
-        # callers store the same value (as Django's URL resolver does when it
-        # populates).
-        started = generation
-        value = func(cls, *args)
-        with lock:
-            # A clear meanwhile means what ``func`` reads changed: the value
-            # may be stale and is not published.
-            if started == generation:
-                entry = cache.get(id(cls))
-                if entry is not None and entry[0]() is not cls:
-                    entry = None  # a dead class's identity, reused
-                if entry is not None and args in entry[1]:
-                    return entry[1][args]
-                if published >= CLASS_CACHE_SIZE:
-                    cache.clear()
-                    published = 0
-                    entry = None
-                if entry is None:
-                    key = id(cls)
-                    forget = functools.partial(_forget, cache, key)
-                    entry = cache[key] = (weakref.ref(cls, forget), {})
-                entry[1][args] = value
-                published += 1
-        return value
-
-    def cache_clear() -> None:
-        nonlocal generation, published
-        with lock:
-            generation += 1
-            cache.clear()
-            published = 0
-
-    def cache_size() -> int:
-        with lock:
-            return sum(len(entries) for _, entries in list(cache.values()))
-
-    wrapper.cache_clear = cache_clear  # type: ignore[attr-defined]
-    wrapper.cache_size = cache_size  # type: ignore[attr-defined]
-    return cast(ClassCached[T], wrapper)
+    return cast(ClassCached[T], _class_cache(func))
 
 
 # -- Purity -------------------------------------------------------------------
@@ -598,6 +525,12 @@ def bridge_base[T](cls: type[T]) -> type[T]:
     _resolve_class_pair.cache_clear()
     _user_defines.cache_clear()
     _clear_dependents()
+    # The optimizations aiodrf builds on (django-fastdrf) treat it as
+    # framework code too, and drop what they decided before. Imported here:
+    # fastdrf's module imports DRF's, which this module does not need.
+    from fastdrf.utils import framework_base
+
+    framework_base(cls)
     return cls
 
 
@@ -632,11 +565,18 @@ class Impl(enum.Enum):
     BASE = "base"
 
 
-_FRAMEWORK_PACKAGES = frozenset({"builtins", "django", "rest_framework", "aiodrf"})
+# django-fastdrf is the package aiodrf builds on: its classes (the msgspec
+# renderer, the responses) are framework code here too.
+_FRAMEWORK_PACKAGES = frozenset(
+    {"builtins", "django", "rest_framework", "aiodrf", "fastdrf"}
+)
 
 
 def is_framework_class(klass: type) -> bool:
-    """True for Django's, DRF's and aiodrf's classes, and registered bridge bases."""
+    """
+    True for Django's, DRF's, django-fastdrf's and aiodrf's classes, and
+    registered bridge bases.
+    """
     return (
         klass in _BRIDGE_BASES
         or klass.__module__.split(".", 1)[0] in _FRAMEWORK_PACKAGES

@@ -70,7 +70,9 @@ def test_an_unknown_patch_is_refused():
 
 
 def test_the_setting_applies_the_patches_at_startup():
-    with override_settings(AIODRF={"MONKEYPATCHES": ["weak_list_children"]}):
+    with override_settings(
+        AIODRF={"MONKEYPATCHES": ["weak_list_children"]}, FASTDRF={}
+    ):
         try:
             apps.get_app_config("aiodrf").ready()
             assert monkeypatches.applied() == ["weak_list_children"]

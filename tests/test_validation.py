@@ -426,7 +426,7 @@ def test_the_class_cache_follows_the_settings():
 
     _classify._CLASS_KINDS.clear()
     assert _classify.validation_kind(PlainSerializer(data={})) is _classify.Kind.UNKNOWN
-    with override_settings(AIODRF={"PURE_POLICIES": [PlainSerializer]}):
+    with override_settings(AIODRF={"PURE_POLICIES": [PlainSerializer]}, FASTDRF={}):
         assert (
             _classify.validation_kind(PlainSerializer(data={})) is _classify.Kind.PURE
         )

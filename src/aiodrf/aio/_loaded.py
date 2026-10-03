@@ -24,9 +24,10 @@ from django.db.models.fields.related_descriptors import (
     ReverseManyToOneDescriptor,
 )
 from django.db.models.query_utils import DeferredAttribute
+from fastdrf._inspection import _PLAIN_KWARGS
 from rest_framework import fields, relations, serializers
 
-from aiodrf.aio._classify import _PLAIN_KWARGS, _instance_shadow_names, is_static
+from aiodrf.aio._classify import _instance_shadow_names, is_static
 from aiodrf.compat import BigIntegerField
 from aiodrf.utils import class_cache, user_defines
 

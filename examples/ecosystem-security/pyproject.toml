@@ -2,7 +2,7 @@
 name = "aiodrf-example-ecosystem-security"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = [
+dependencies = ["aiodrf-asgi-lifespan>=0.1,<0.2",
   "django-aiodrf[filter,spectacular]", "django>=6.1,<6.2", "uvicorn>=0.30", "httpx>=0.27",
   "django-guardian", "djangorestframework-guardian", "rules",
   "django-simple-history", "django-auditlog", "django-oauth-toolkit",

@@ -18,6 +18,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import include, path
+from fastdrf.prefetch import forget_lookups
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_framework import viewsets as drf_viewsets
@@ -26,7 +27,6 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient
 
 from aiodrf import viewsets
-from aiodrf.contrib.builtin.prefetch import forget_lookups
 from aiodrf.test import AsyncAPIClient, count_hops
 from tests.base import both_transports
 from tests.ecosystem.base import same_response

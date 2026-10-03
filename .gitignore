@@ -122,10 +122,7 @@ __marimo__/
 uv.lock
 
 # Independent local repositories and review/measurement artifacts.
-/forks/django-rest-framework/
-/forks/aiodrf-contrib/
-/forks/django-fastdrf/
-/forks/aiodrf-benchmarks/
+/forks/
 /.local/
 /release-bundle/
 

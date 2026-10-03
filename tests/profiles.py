@@ -10,12 +10,15 @@ Every opt-in the profile selects is on; the browsable API stays a renderer,
 so that tests of HTML pages keep their subject. ``DataResponse`` is chosen by
 view code, not by a setting, and is not applied here. A test that verifies
 another configuration declares it with ``pytest.mark.aiodrf_settings``
-(``tests/conftest.py``).
+(``tests/conftest.py``). The profiles hold aiodrf's and django-fastdrf's keys
+together; :func:`split_settings` gives each setting its own.
 """
 
 import os
 
-TUNED_AIODRF = {
+from aiodrf.settings import MOVED_TO_FASTDRF
+
+TUNED = {
     "SERIALIZER_BACKEND": "msgspec",
     "SERIALIZER_BACKEND_PARITY": "strict",
     "SERIALIZER_BACKEND_FALLBACK": "error",
@@ -25,19 +28,28 @@ TUNED_AIODRF = {
     "REQUEST_THREADS": 32,
 }
 TUNED_RENDERERS = [
-    "aiodrf.contrib.msgspec.renderers.MsgspecJSONRenderer",
+    "fastdrf.msgspec.renderers.MsgspecJSONRenderer",
     "rest_framework.renderers.BrowsableAPIRenderer",
 ]
 
 
 PROFILES = {
-    "tuned": TUNED_AIODRF,
+    "tuned": TUNED,
     # The profile with the compiler's default fallback: serializers that do
     # not compile use DRF instead of raising.
-    "tuned-drf-fallback": {**TUNED_AIODRF, "SERIALIZER_BACKEND_FALLBACK": "drf"},
+    "tuned-drf-fallback": {**TUNED, "SERIALIZER_BACKEND_FALLBACK": "drf"},
     # The profile with output compiled without msgspec or pydantic.
-    "tuned-python": {**TUNED_AIODRF, "SERIALIZER_BACKEND": "python"},
+    "tuned-python": {**TUNED, "SERIALIZER_BACKEND": "python"},
 }
+
+
+def split_settings(values):
+    """``values`` as ``(AIODRF, FASTDRF)``: django-fastdrf's keys go to the second."""
+    aiodrf = {
+        key: value for key, value in values.items() if key not in MOVED_TO_FASTDRF
+    }
+    fastdrf = {key: value for key, value in values.items() if key in MOVED_TO_FASTDRF}
+    return aiodrf, fastdrf
 
 
 def apply(namespace):
@@ -45,7 +57,9 @@ def apply(namespace):
     profile = PROFILES.get(os.environ.get("AIODRF_TEST_PROFILE", ""))
     if profile is None:
         return
-    namespace["AIODRF"] = {**namespace.get("AIODRF", {}), **profile}
+    aiodrf, fastdrf = split_settings(profile)
+    namespace["AIODRF"] = {**namespace.get("AIODRF", {}), **aiodrf}
+    namespace["FASTDRF"] = {**namespace.get("FASTDRF", {}), **fastdrf}
     namespace["REST_FRAMEWORK"] = {
         **namespace.get("REST_FRAMEWORK", {}),
         "DEFAULT_RENDERER_CLASSES": TUNED_RENDERERS,

@@ -17,13 +17,13 @@ from django.db.models import Count, Max, Prefetch
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from fastdrf import compiler
 from rest_framework import relations
 from rest_framework import serializers as drf_serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from tests.testapp.models import Attachment, Author, Book, Edition, Invoice, Tag
 
 BACKENDS = ["msgspec", "pydantic", "python"]
@@ -108,7 +108,7 @@ def both(serializer_factory, backend, parity="strict"):
         "SERIALIZER_BACKEND_FALLBACK": "error",
     }
     with (
-        override_settings(AIODRF=settings),
+        override_settings(FASTDRF=settings, AIODRF={}),
         CaptureQueriesContext(connection) as queries,
     ):
         compiled = aio.try_data(serializer_factory())
@@ -157,7 +157,7 @@ def test_an_unsaved_instance_has_no_related_primary_keys(library, backend):
     book = Book(title="Draft", isbn="9", author=ada)
     expected = BookTagIds(book).data
     assert expected["tags"] == []
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_data(BookTagIds(book)) == expected
 
 
@@ -205,7 +205,7 @@ def test_other_to_many_relations_stay_on_drf(library, backend):
     for serializer_class, source, reason in cases:
         assert reason in compiler.report(serializer_class(source, many=True))
         drf = serializer_class(source, many=True).data
-        with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+        with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
             compiled = aio.try_data(serializer_class(source, many=True))
         assert compiled == drf
 
@@ -299,7 +299,7 @@ def test_other_sources_stay_on_drf(library, backend):
     for serializer_class, source, reason in cases:
         assert reason in compiler.report(serializer_class(source, many=True))
         drf = serializer_class(source, many=True).data
-        with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+        with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
             compiled = aio.try_data(serializer_class(source, many=True))
         assert compiled == drf
 
@@ -323,7 +323,7 @@ def test_a_missing_related_row_is_drfs_output(library, backend):
     book = Book.objects.get(title="First")
     book.author_id = 10_000
     expected = BookAuthorName(book).data
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_data(BookAuthorName(book)) == expected
 
 
@@ -337,7 +337,7 @@ async def test_related_reads_run_where_drf_would_query(backend, worker_connectio
     tag = await Tag.objects.acreate(name="red")
     await book.tags.aadd(tag)
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         tags = await aio.data(BookTagIds(Book.objects.all(), many=True))
         names = await aio.data(BookAuthorName(Book.objects.all(), many=True))
     assert tags == [{"id": book.pk, "title": "First", "tags": [tag.pk]}]
@@ -542,7 +542,8 @@ def test_model_fields_of_values_the_database_computes(db, backend):
     invoice = Invoice.objects.create(net=1)
     drf = InvoiceOut(invoice).data
     with override_settings(
-        AIODRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
+        FASTDRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"},
+        AIODRF={},
     ):
         assert aio.try_data(InvoiceOut(Invoice.objects.get(pk=invoice.pk))) == drf
 
@@ -583,9 +584,9 @@ def test_file_fields(db, backend, with_request):
 def test_file_urls_are_not_built_on_the_event_loop():
     # A storage may perform I/O to build a URL: a loaded column is not enough.
     attachment = Attachment(pk=1, title="a", file="attachments/a.txt")
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}):
         assert aio.try_data(AttachmentOut(attachment))
-        assert compiler.loaded_encoder(AttachmentOut(attachment), attachment) is None
+        assert compiler.loaded_encoder(AttachmentOut(attachment)) is None
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -608,7 +609,7 @@ def test_an_error_while_reading_is_not_hidden_by_the_error_fallback(
             "get_object",
             side_effect=RuntimeError("the database is down"),
         ),
-        override_settings(AIODRF=settings),
+        override_settings(FASTDRF=settings, AIODRF={}),
         pytest.raises(RuntimeError, match="the database is down"),
     ):
         aio.try_data(BookAuthorName(source, many=many))
@@ -634,7 +635,7 @@ def test_what_one_instance_holds_is_drfs_whatever_the_fallback(
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": fallback}
     for serializer_class, instance in cases:
         expected = serializer_class(instance).data
-        with override_settings(AIODRF=settings):
+        with override_settings(FASTDRF=settings, AIODRF={}):
             assert compiler.compiled_for(serializer_class(instance)) is not None
             assert aio.try_data(serializer_class(instance)) == expected
 
@@ -685,7 +686,7 @@ def test_a_missing_instance_attribute_is_skipped_by_drf(library, backend):
     author = Author.objects.first()
     expected = AuthorCounts(author).data
     assert "book_count" not in expected
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_data(AuthorCounts(author)) == expected
 
 

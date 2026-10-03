@@ -221,7 +221,7 @@ async def test_the_initial_representation_runs_in_the_worker():
     invalid = Initial(data={"value": "x"})
     assert not await invalid.ais_valid()
     assert await invalid.adata() == {"value": 1}
-    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}):
+    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}, FASTDRF={}):
         plain = serializers.Serializer()
         assert await aio.data(plain) == {}
 

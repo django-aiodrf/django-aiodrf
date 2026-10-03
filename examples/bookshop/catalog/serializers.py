@@ -1,8 +1,8 @@
 """Schema-backed serializers and their validation contracts. Example: bookshop."""
 
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from rest_framework import serializers
 
-from aiodrf.asgi import get_lifespan_state
 from aiodrf.contrib.builtin.list_prefetch import PrefetchListSerializer
 from bookshop.lifecycle import Resources
 

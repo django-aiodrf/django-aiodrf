@@ -27,8 +27,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
 The view attributes are an alternative to `Meta`, not a requirement to repeat
 it. Resolution is nearest serializer `Meta`, parent serializer `Meta`, view
-attributes from DRF's ordinary serializer context, then global `AIODRF`
-settings. `None` inherits; `cache_fields=False` explicitly disables. A nested
+attributes from DRF's ordinary serializer context, then the global `FASTDRF`
+settings (`CACHE_SERIALIZER_FIELDS`, `FIELD_COPY_MODE`). `None` inherits; `cache_fields=False` explicitly disables. A nested
 serializer can opt out even when its parent/view opts in. Without a view in
 context, standalone serializers use Meta/global settings. Custom factories
 that omit DRF's context intentionally do not receive view-scoped options. The

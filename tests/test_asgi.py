@@ -2,12 +2,12 @@
 
 import asyncio
 
+from aiodrf_asgi_lifespan import signals
+from aiodrf_asgi_lifespan.asgi import LifespanApplication, get_asgi_application
 from django.test import TestCase, override_settings
 from django.urls import path
 from rest_framework.permissions import AllowAny
 
-from aiodrf import signals
-from aiodrf.asgi import LifespanApplication, get_asgi_application
 from aiodrf.response import Response
 from aiodrf.views import APIView
 

@@ -32,12 +32,12 @@ from django.db.backends.utils import CursorWrapper
 from django.http import JsonResponse
 from django.test import override_settings
 from django.urls import path
+from fastdrf import inputs
 from rest_framework import serializers
 from rest_framework import viewsets as drf_viewsets
 from rest_framework.views import APIView as DRFAPIView
 
 from aiodrf import aio, viewsets
-from aiodrf.contrib import inputs
 from aiodrf.response import Response, StreamingResponse
 from aiodrf.test import count_hops
 from aiodrf.utils import run_sync

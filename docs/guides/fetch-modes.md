@@ -10,13 +10,14 @@ Related-manager queries are not themselves batched by this mechanism. See
 ## Configuration
 
 ```python
-AIODRF = {
+FASTDRF = {  # django-fastdrf's setting, which aiodrf reads
     "FETCH_MODE": "raise",  # None (unchanged), "peers", or "raise"
 }
 ```
 
-Generic views apply this mode on Django versions that provide it. On older
-supported versions the setting cannot enforce fetch modes; it is not a backport.
+Generic views apply this mode on Django versions that provide it. On Django
+before 6.1 a `FETCH_MODE` is a system-check error (`fastdrf.E006`): leave it
+unset. It is not a backport.
 For endpoint-specific selection, keep the global setting at `None` and use
 Django's public API:
 
@@ -37,5 +38,5 @@ load known relations explicitly and keep lazy representation in a worker.
 Use `FETCH_RAISE` in tests to expose unintended reads.
 
 `Meta.auto_prefetch` is a separate optional optimizer under
-`aiodrf.contrib.builtin.prefetch`. It derives explicit loading paths from serializer
+`fastdrf.prefetch`. It derives explicit loading paths from serializer
 fields; fetch modes govern later implicit access. Neither replaces authorization.

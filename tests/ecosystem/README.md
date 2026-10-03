@@ -35,7 +35,7 @@ here, and `tests/test_docs.py` checks that none is missing.
 | django-typer | `ecosystem/test_typer.py` |
 | django-redis, redis-py | `tests/test_caches.py` |
 | django-valkey, valkey-py | `ecosystem/valkey` (`nox -s ecosystem_valkey`) |
-| redis.asyncio backend | `ecosystem/redis` (`nox -s ecosystem_redis`); Sentinel and Cluster in `tests/services/cache-topologies.md` |
+| redis.asyncio backend | `ecosystem/redis` (`nox -s ecosystem_redis`); Sentinel and Cluster in aiodrf-async-cache |
 | django-zeal | `ecosystem/test_zeal.py` |
 | asgi-lifespan, HTTPX | `ecosystem/test_lifespan.py` |
 | channels, djangochannelsrestframework | `ecosystem/test_channels.py`, `ecosystem/test_channels_serializers.py` |

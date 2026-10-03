@@ -72,7 +72,7 @@ def test_atomic_save_on_mongodb_needs_the_contrib():
         warnings = check_mongodb_transactions(None)
         assert [(w.id, w.obj) for w in warnings] == [("aiodrf.W007", "documents")]
         connections.__getitem__.assert_not_called()
-        with override_settings(AIODRF={"ATOMIC_SAVE": False}):
+        with override_settings(AIODRF={"ATOMIC_SAVE": False}, FASTDRF={}):
             assert check_mongodb_transactions(None) == []
         connections.settings = {"default": {"ENGINE": "django.db.backends.sqlite3"}}
         assert check_mongodb_transactions(None) == []

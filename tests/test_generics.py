@@ -12,6 +12,7 @@ from django.db import connections
 from django.db.models import Prefetch
 from django.test import TestCase, override_settings
 from django.urls import path
+from fastdrf import prefetch
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
@@ -20,7 +21,6 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from aiodrf import generics, permissions, serializers, viewsets
 from aiodrf.compat import DJANGO_VERSION
-from aiodrf.contrib.builtin import prefetch
 from aiodrf.contrib.django_filters import DjangoFilterBackend
 from aiodrf.pagination import BasePagination
 from aiodrf.request import Request
@@ -230,7 +230,7 @@ class PerRequestCostTests(Fixtures, TestCase):
     async def test_auto_prefetch_lookups_are_derived_once(self):
         from unittest import mock
 
-        from aiodrf.contrib.builtin import prefetch
+        from fastdrf import prefetch
 
         prefetch.forget_lookups()
         with mock.patch.object(
@@ -448,11 +448,9 @@ def test_dynamic_prefetch_fields_are_not_shared_between_instances():
 
 
 def test_legacy_prefetch_imports_remain_available():
-    from aiodrf import prefetch as legacy
     from aiodrf.contrib.builtin.list_prefetch import PrefetchListSerializer
     from aiodrf.contrib.prefetch import PrefetchListSerializer as LegacyList
 
-    assert legacy.auto_prefetch is prefetch.auto_prefetch
     assert LegacyList is PrefetchListSerializer
 
 

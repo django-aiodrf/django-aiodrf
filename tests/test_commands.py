@@ -67,17 +67,19 @@ def test_inspect_serializers_json_is_direction_and_backend_specific():
         "eligible": True,
         "code": "eligible",
         "reason": None,
+        "delegated": [],
     }
     assert author["directions"]["output"] == {
         "eligible": True,
         "code": "eligible",
         "reason": None,
+        "delegated": [],
     }
 
 
 def test_explicit_serializer_paths_do_not_enumerate_views_and_are_deduplicated():
     with patch(
-        "aiodrf.management.commands.aiodrf_inspect_serializers.EndpointEnumerator"
+        "fastdrf.management.commands.fastdrf_inspect_serializers.EndpointEnumerator"
     ) as enumerator:
         records = json.loads(
             "\n".join(
@@ -276,12 +278,12 @@ FAILING = {
     ),
     "output": (
         "tests.testapp.serializers.AuthorSerializer",
-        "aiodrf.management.commands.aiodrf_inspect_serializers.report_details",
+        "fastdrf.management.commands.fastdrf_inspect_serializers.report_details",
         "could not be analyzed: RuntimeError: analysis failed",
     ),
     "input": (
         "tests.testapp.serializers.AuthorSerializer",
-        "aiodrf.contrib.inputs.report_input_details",
+        "fastdrf.management.commands.fastdrf_inspect_serializers.report_input_details",
         "could not be analyzed: RuntimeError: analysis failed",
     ),
 }
@@ -319,7 +321,7 @@ def test_inspection_does_not_swallow_interruptions():
 @pytest.mark.aiodrf_settings(SERIALIZER_BACKEND="msgspec")
 def test_a_backend_that_is_not_installed_is_reported_per_direction():
     with patch(
-        "aiodrf.management.commands.aiodrf_inspect_serializers.find_spec",
+        "fastdrf.management.commands.fastdrf_inspect_serializers.find_spec",
         return_value=None,
     ):
         records = json.loads(
@@ -339,6 +341,7 @@ def test_a_backend_that_is_not_installed_is_reported_per_direction():
         "eligible": False,
         "code": "backend_not_installed",
         "reason": "msgspec is not installed",
+        "delegated": [],
     }
     assert author["directions"] == {"output": missing, "input": missing}
     # What stays on DRF for another reason still says so.
@@ -370,6 +373,7 @@ def test_a_schema_serializer_is_reported_as_its_schemas():
         "eligible": False,
         "code": "schema_serializer",
         "reason": "msgspec validates and represents it",
+        "delegated": [],
     }
     assert records[0]["directions"] == {"output": expected, "input": expected}
     lines = inspect("--serializer", f"{__name__}.AuthorSchemaSerializer")

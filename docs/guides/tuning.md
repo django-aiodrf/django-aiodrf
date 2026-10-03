@@ -107,7 +107,7 @@ native async driver or remove Django's ORM adaptation.
 | Scalar field cloning | Cached fields plus FIELD_COPY_MODE=clone | Avoid repeated initialization of exact built-in scalar fields; unsupported fields use deepcopy |
 | Recursive field-copy plans | Cached fields plus FIELD_COPY_MODE=compiled | Precompute nested/container copy operations, preserve constructors and custom deepcopy; selectable per serializer or view |
 | Related lookup batching | BATCH_RELATED_LOOKUPS=True | Eligible many-valued primary-key input fields |
-| Data responses | Handlers return `aiodrf.response.DataResponse` | JSON answers without DRF's template response; `data` is not kept after rendering, and middleware that expects DRF's `Response` attributes or `process_template_response` does not apply |
+| Data responses | Handlers return `fastdrf.response.DataResponse` | JSON answers without DRF's template response; `data` is not kept after rendering, and middleware that expects DRF's `Response` attributes or `process_template_response` does not apply |
 | Tuned | All of the above; see the [tuned profile](tuned-profile.md) | The fastest configuration, for workloads that meet its conditions; not a general default |
 
 The [serializer backends example](../../examples/serializer-backends/README.md)
@@ -131,8 +131,8 @@ field or a single-field `UniqueConstraint` is shared by every copy, so its
 message is formatted when it is read, in the request's language. The model
 managers DRF passes to the relation fields it builds stay shared by reference,
 as in DRF, in every copy mode. Template classes, models and Meta declarations
-must remain static. Changing aiodrf's settings clears both templates and copy
-plans. Copy plans are an internal optimization you enable explicitly; they do
+must remain static. Changing `FASTDRF` or `REST_FRAMEWORK` clears both
+templates and copy plans. Copy plans are an internal optimization you enable explicitly; they do
 not replace `Field.__deepcopy__` for other code.
 
 `FIELD_COPY_MODE="compiled"` additionally prepares recursive constructor-copy

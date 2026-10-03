@@ -347,16 +347,22 @@ and the schema and check commands never call the lifespan factory.
 `aiodrf/contrib/spectacular/extensions.py` is imported by `AppConfig.ready()`
 when drf-spectacular is installed (only the package being absent is
 tolerated; an error inside it is raised). It registers aiodrf's
-`SessionAuthentication`, which spectacular matches by exact class, and
-documents msgspec/pydantic serializers from their schema classes: the input
-schema for requests (an explicit `Meta.partial_schema` for PATCH), the output
-schema for responses, with the names the runtime uses (`by_alias=True` for
-pydantic). Components are identified by their shape. A pydantic model whose
-validation and serialization shapes differ (a `serialization_alias`) gets a
-`<Name>Request` component for the request side, nested or top-level; without
-`COMPONENT_SPLIT_REQUEST` spectacular would not split it, so aiodrf does and
-warns. DRF-defined serializers are documented by spectacular as usual,
-whichever backend produces their output.
+`SessionAuthentication`, which spectacular matches by exact class, and the
+streaming response schemas. The same `ready()` imports django-fastdrf's
+`fastdrf.spectacular`, which documents msgspec/pydantic serializers from
+their schema classes: the input schema for requests (an explicit
+`Meta.partial_schema` for PATCH), the output schema for responses, with the
+names the runtime uses (`by_alias=True` for pydantic). Components are
+identified by their shape. A pydantic model whose validation and
+serialization shapes differ (a `serialization_alias`) gets a `<Name>Request`
+component for the request side, nested or top-level; without
+`COMPONENT_SPLIT_REQUEST` spectacular would not split it, so the extension
+does and warns. DRF-defined serializers are documented by spectacular as
+usual, whichever backend produces their output.
+
+aiodrf's view classes and mixins have no docstrings: spectacular describes an
+operation with the first docstring among the view's classes before DRF's, and
+would publish a mixin's for every view without its own.
 
 The generated OpenAPI 3.1 document validates, and real nested `POST` and
 partial `PATCH` bodies validate against its components. Recursive Pydantic

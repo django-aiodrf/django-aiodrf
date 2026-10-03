@@ -5,15 +5,15 @@ import contextlib
 import threading
 
 import pytest
+from aiodrf_asgi_lifespan.asgi import LifespanApplication
+from aiodrf_asgi_lifespan.signals import asgi_shutdown, asgi_startup
 from django.utils.asyncio import async_unsafe
 
-from aiodrf.asgi import LifespanApplication
 from aiodrf.response import (
     EventStreamResponse,
     StreamingArrayResponse,
     StreamingResponse,
 )
-from aiodrf.signals import asgi_shutdown, asgi_startup
 from tests.asgi_driver import ASGIDriver
 
 

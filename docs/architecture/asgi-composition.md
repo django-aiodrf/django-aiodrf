@@ -47,7 +47,7 @@ routers, views and global settings unchanged. A new `view` decorator, custom
 request type, dependency injector and schema generator would materially expand
 the maintenance surface and are not recommended for this requirement.
 
-The existing `aiodrf.asgi.LifespanApplication` accepts an ASGI application and
+The existing `aiodrf_asgi_lifespan.asgi.LifespanApplication` accepts an ASGI application and
 owns lifespan processing; it is not an HTTP router. A composed application must
 have one explicit lifespan owner. Mounting child applications does not by itself
 prove that their startup/shutdown handlers execute. Initialize HTTP clients,

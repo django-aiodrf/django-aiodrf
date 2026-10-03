@@ -111,7 +111,7 @@ class _TransactionTests:
             author["name"] for author in (await self.api("get", "/authors/")).data
         ] == ["Octavia"]
 
-    @override_settings(AIODRF={"ATOMIC_SAVE": False})
+    @override_settings(AIODRF={"ATOMIC_SAVE": False}, FASTDRF={})
     async def test_without_atomic_save_the_first_insert_stays(self):
         await Tag.objects.acreate(name="taken")
         with pytest.raises(IntegrityError):

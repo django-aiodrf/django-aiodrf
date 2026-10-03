@@ -7,9 +7,9 @@ import weakref
 
 import pytest
 from django.test import override_settings
+from fastdrf import _field_cache as field_cache
 
 from aiodrf import serializers, utils
-from aiodrf.contrib.builtin import field_cache
 from tests.testapp.models import Author
 
 
@@ -101,33 +101,11 @@ def test_class_registrations_do_not_own_temporary_classes(register):
     assert reference() is None
 
 
-def test_class_cache_bounds_values_that_refer_back_to_the_key(monkeypatch):
-    monkeypatch.setattr(utils, "CLASS_CACHE_SIZE", 8)
-
-    @utils.class_cache
-    def identity(cls, variant):
-        return cls
-
-    references = []
-    for index in range(24):
-        cls = type(f"Temporary{index}", (), {})
-        references.append(weakref.ref(cls))
-        assert identity(cls, index) is cls
-        assert identity.cache_size() <= 8
-    del cls
-    gc.collect()
-    assert all(reference() is None for reference in references[:-8])
-    identity.cache_clear()
-    gc.collect()
-    assert all(reference() is None for reference in references)
-
-
 @pytest.mark.aiodrf_settings(CACHE_SERIALIZER_FIELDS=False, FIELD_COPY_MODE="deepcopy")
 @pytest.mark.parametrize("backend", ["msgspec", "pydantic"])
 def test_input_signatures_do_not_retain_rejected_callable_limits(backend):
     from django.core.validators import MaxValueValidator
-
-    from aiodrf.contrib import inputs
+    from fastdrf import inputs
 
     def build():
         class Temporary(serializers.Serializer):
@@ -153,8 +131,7 @@ def test_input_signatures_do_not_retain_rejected_callable_limits(backend):
 @pytest.mark.parametrize("limit", [[], {}, lambda: 1])
 def test_unsupported_validator_limits_do_not_need_to_be_hashable(limit):
     from django.core.validators import MaxValueValidator
-
-    from aiodrf.contrib import inputs
+    from fastdrf import inputs
 
     class Input(serializers.Serializer):
         value = serializers.IntegerField(validators=[MaxValueValidator(limit)])
@@ -164,7 +141,7 @@ def test_unsupported_validator_limits_do_not_need_to_be_hashable(limit):
 
 @pytest.mark.parametrize("direction", ["input", "output"])
 def test_compiler_buckets_bound_custom_field_class_cycles(monkeypatch, direction):
-    from aiodrf.contrib import compiler, inputs
+    from fastdrf import compiler, inputs
 
     monkeypatch.setattr(compiler, "MAX_SERIALIZER_CLASSES", 8)
 
@@ -185,7 +162,7 @@ def test_compiler_buckets_bound_custom_field_class_cycles(monkeypatch, direction
             assert compiler.compiled_for(instance) is None
         return weakref.ref(Temporary)
 
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}):
         references = [build() for _ in range(24)]
         gc.collect()
         assert all(reference() is None for reference in references[:-8])
@@ -197,7 +174,7 @@ def test_compiler_buckets_bound_custom_field_class_cycles(monkeypatch, direction
 
 
 def test_cleared_compiler_bucket_cannot_be_republished():
-    from aiodrf.contrib.compiler import _SerializerCache
+    from fastdrf.compiler import _SerializerCache
 
     cache = _SerializerCache()
     previous = cache.get_or_create(Author)
@@ -209,14 +186,14 @@ def test_cleared_compiler_bucket_cannot_be_republished():
 
 @pytest.mark.parametrize("size", [0, -1, 1.5, None])
 def test_schema_cache_rejects_sizes_that_cannot_bound_eviction(size):
-    from aiodrf.contrib.typed import BoundedCache
+    from fastdrf.typed import BoundedCache
 
     with pytest.raises(ValueError, match="positive integer"):
         BoundedCache(size)
 
 
 def test_prefetch_cache_hits_do_not_acquire_the_publication_lock(monkeypatch):
-    from aiodrf.contrib.builtin import prefetch
+    from fastdrf import prefetch
 
     monkeypatch.setattr(prefetch, "_static_tree", lambda serializer: True)
     monkeypatch.setattr(
@@ -237,7 +214,7 @@ def test_prefetch_cache_hits_do_not_acquire_the_publication_lock(monkeypatch):
 
 
 def test_prefetch_clear_does_not_publish_an_inflight_lookup(monkeypatch):
-    from aiodrf.contrib.builtin import prefetch
+    from fastdrf import prefetch
 
     cache = prefetch._LookupCache()
     monkeypatch.setattr(prefetch, "_static_tree", lambda serializer: True)
@@ -252,7 +229,7 @@ def test_prefetch_clear_does_not_publish_an_inflight_lookup(monkeypatch):
 
 
 def test_prefetch_cache_does_not_own_serializer_or_model_classes(monkeypatch):
-    from aiodrf.contrib.builtin import prefetch
+    from fastdrf import prefetch
 
     monkeypatch.setattr(prefetch, "_static_tree", lambda serializer: True)
     monkeypatch.setattr(
@@ -305,21 +282,12 @@ async def test_cancellation_closes_the_hop_scope_for_inherited_contexts():
     assert counter.count == hops.count == 0
 
 
-def test_class_cache_bounds_variants_of_one_live_class(monkeypatch):
-    monkeypatch.setattr(utils, "CLASS_CACHE_SIZE", 8)
-
-    @utils.class_cache
-    def metadata(cls, variant):
-        return variant
-
-    for index in range(32):
-        assert metadata(Author, index) == index
-        assert metadata.cache_size() <= 8
-
-
 @pytest.mark.parametrize("mode", ["deepcopy", "clone", "compiled"])
 def test_field_templates_bound_validator_backreferences(monkeypatch, mode):
-    monkeypatch.setattr(utils, "CLASS_CACHE_SIZE", 8)
+    # The field templates are django-fastdrf's class cache.
+    from fastdrf import utils as fastdrf_utils
+
+    monkeypatch.setattr(fastdrf_utils, "CLASS_CACHE_SIZE", 8)
 
     def build():
         class Temporary(serializers.ModelSerializer):
@@ -339,7 +307,7 @@ def test_field_templates_bound_validator_backreferences(monkeypatch, mode):
         return weakref.ref(Temporary)
 
     with override_settings(
-        AIODRF={"CACHE_SERIALIZER_FIELDS": True, "FIELD_COPY_MODE": mode}
+        FASTDRF={"CACHE_SERIALIZER_FIELDS": True, "FIELD_COPY_MODE": mode}, AIODRF={}
     ):
         references = [build() for _ in range(24)]
         gc.collect()
@@ -347,22 +315,3 @@ def test_field_templates_bound_validator_backreferences(monkeypatch, mode):
         assert field_cache._field_template.cache_size() <= 8
     gc.collect()
     assert all(reference() is None for reference in references)
-
-
-def test_a_class_cache_forgets_a_class_that_goes_away():
-    from aiodrf.utils import class_cache
-
-    @class_cache
-    def name_of(cls):
-        return cls.__name__
-
-    gone = type("Gone", (), {})
-    assert name_of(gone) == "Gone"
-    assert name_of.cache_size() == 1
-    reference = weakref.ref(gone)
-    del gone
-    gc.collect()
-    assert reference() is None
-    assert name_of.cache_size() == 0
-    # Another class, perhaps at the same address, is not answered for it.
-    assert name_of(type("New", (), {})) == "New"

@@ -22,7 +22,8 @@ REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
 }
 MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
-AIODRF = {"LIFESPAN": "demo.lifecycle.lifespan"}
+AIODRF = {}
+DJANGO_LIFESPAN = "demo.lifecycle.lifespan"
 INSTALLED_APPS = ["rest_framework", "aiodrf", "aiodrf.contrib.mongodb", "demo"]
 DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
 DATABASES = {

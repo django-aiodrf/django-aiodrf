@@ -5,6 +5,7 @@ import threading
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.test import override_settings
 from django.utils.asyncio import async_unsafe
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
@@ -258,3 +259,22 @@ async def test_a_manager_is_evaluated_in_the_worker(worker_connections):
             list_serializer_class = Names
 
     assert await aio.data(NameSerializer(manager, many=True)) == [{"name": "Ursula"}]
+
+
+class StaticAuthorSerializer(serializers.ModelSerializer):
+    """Compiles: the list's own awaited step must still run."""
+
+    class Meta:
+        model = Author
+        fields = ["name"]
+        list_serializer_class = RatedAuthors
+
+
+@pytest.mark.parametrize("backend", ["drf", "msgspec", "python"])
+async def test_a_compiled_backend_runs_the_lists_prefetch(backend):
+    await library()
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
+        instances = [author async for author in Author.objects.order_by("name")]
+        data = await aio.data(StaticAuthorSerializer(instances, many=True))
+    assert data == [{"name": "Ada"}, {"name": "Bo"}, {"name": "Cyd"}]
+    assert prefetches == [["Ada", "Bo", "Cyd"]]

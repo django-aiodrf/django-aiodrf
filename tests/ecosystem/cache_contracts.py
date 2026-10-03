@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import httpx
+from aiodrf_async_cache.lifespan import cache_lifespan
 from asgi_lifespan import LifespanManager
 from asgiref.sync import sync_to_async
 from django.core.cache import caches
@@ -13,7 +14,6 @@ from django.urls import path
 from django.utils.cache import patch_vary_headers
 
 from aiodrf.asgi import get_asgi_application
-from aiodrf.contrib.async_cache import cache_lifespan
 from aiodrf.response import Response
 from aiodrf.views import APIView
 
@@ -58,16 +58,18 @@ async def check_page_cache(config, synchronous_backend):
     with override_settings(
         ROOT_URLCONF=(path("cached/", View.as_view()),),
         MIDDLEWARE=[
-            "aiodrf.contrib.async_cache.AsyncUpdateCacheMiddleware",
+            "aiodrf_async_cache.middleware.AsyncUpdateCacheMiddleware",
             "django.middleware.common.CommonMiddleware",
-            "aiodrf.contrib.async_cache.AsyncFetchFromCacheMiddleware",
+            "aiodrf_async_cache.middleware.AsyncFetchFromCacheMiddleware",
         ],
         CACHES={
             "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
             "native": config,
             "sync": sync_config,
         },
-        AIODRF={"LIFESPAN": lifespan},
+        AIODRF={},
+        DJANGO_LIFESPAN=lifespan,
+        FASTDRF={},
         CACHE_MIDDLEWARE_SECONDS=30,
         CACHE_MIDDLEWARE_ALIAS="sync",
     ):

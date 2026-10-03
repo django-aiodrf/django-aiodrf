@@ -37,13 +37,15 @@ the [support policy], [extension contract] and named test scenarios.
 | API semantics | DRF | Field definitions, serializer metadata, errors, negotiation, renderers, parsers, policies, routers and response conventions |
 | Async orchestration | `views`, `request`, `generics`, `mixins`, `policies`, `aio` | Await supported operations; adapt synchronous work; preserve override selection and execution order |
 | Execution metadata | `utils`, `_builtins`, `hooks`, `settings`, `compat` | Pair resolution, worker entry, known inline operations, configuration and version-dependent behavior |
-| Optional extensions | `contrib`, `asgi`, streaming classes, management commands | Compilation, typed schemas, lifecycle ownership, streaming, batching and named ecosystem adapters |
+| Optional extensions | `contrib`, `asgi`, streaming classes, management commands | Typed schemas on async serializers, lifecycle ownership, streaming, batching and named ecosystem adapters |
 | Deployment experiments | `unsafe.middleware` | Explicit middleware scheduling alternative, disabled by default |
 | Verification and migration | `test`, `checks`, `codemod`, `tests` | Async clients, diagnostics, reviewable migration edits and compatibility contracts |
 
 `REST_FRAMEWORK` continues to configure DRF authentication, permissions,
 renderers, parsers, filters and pagination. `AIODRF` controls only additional
-execution policies and opt-in features. Optional libraries are imported when
+execution policies and opt-in features. The serializer optimizations
+(compilation, input recognition, field caching, related lookups, fetch modes)
+come from django-fastdrf, a dependency, and are configured with `FASTDRF`. Optional libraries are imported when
 their integration is selected; installing msgspec must not silently change the
 serializer backend.
 
@@ -271,7 +273,7 @@ These are distinct features, not interchangeable names for an async serializer.
 
 ### 7.1 Selection and precedence
 
-`AIODRF["SERIALIZER_BACKEND"]` selects `drf` (default), `msgspec` or `pydantic`.
+`FASTDRF["SERIALIZER_BACKEND"]` selects `drf` (default), `msgspec` or `pydantic`.
 `Meta.serializer_backend` overrides it per serializer, including opting back
 out to `drf`. Parity and fallback settings control output eligibility. The
 allowlist `ALLOWED_SERIALIZER_BACKENDS` instead controls permitted serializer
@@ -284,9 +286,18 @@ replaced. Select optimization through the documented awaited operations.
 
 ### 7.2 Structural analysis and backend strategies
 
-`contrib.compiler` analyzes fields, model sources, custom hooks and relation
+The compiler, input recognition, field caching and copying, related lookups
+and auto-prefetch are maintained in
+[django-fastdrf](https://github.com/ctolon/django-fastdrf), the synchronous
+package aiodrf depends on; the former `aiodrf.contrib` modules were removed, so
+they are imported from `fastdrf`. aiodrf registers its serializer bases with fastdrf
+(`bridge_base` calls `fastdrf.utils.framework_base`), keeps its own
+classification of what may run on the event loop (`aio._classify`), and
+decides where the compiled code runs.
+
+`fastdrf.compiler` analyzes fields, model sources, custom hooks and relation
 shapes into a reusable specification. The msgspec and Pydantic compiler modules
-and the dependency-free python backend (`contrib.builtin.output`) turn
+and the dependency-free python backend (`fastdrf.output`) turn
 eligible specifications into backend-specific encoders. Keeping eligibility
 separate from encoding avoids asking a backend's permissive coercion rules to
 define DRF compatibility.
@@ -327,7 +338,7 @@ some payloads does not mean strict parity for every model value.
 
 ### 7.3 Input recognizer
 
-`contrib.inputs` accepts canonical values only when DRF would produce the same
+`fastdrf.inputs` accepts canonical values only when DRF would produce the same
 `validated_data`. Exact built-in field types and understood constant constraints
 define that subset. Coercions, custom validators, relation lookups and malformed
 values are left to DRF. Recognition does not invent a second error format.
@@ -389,7 +400,7 @@ codes and endpoint usages, including uninspectable dynamic factories. Static
 inspection is not request tracing. Constructors may run during inspection and
 must be suitable for use without a live request.
 
-`aiodrf_convert` generates schema/serializer source and notes unsupported or
+django-fastdrf's `fastdrf_convert` generates schema/serializer source and notes unsupported or
 lossy constructs. Generated source requires review; it is not proof that two
 validation languages are equivalent. JSON codec selection remains independent
 of both tools and of the compiler.
@@ -397,9 +408,12 @@ of both tools and of the compiler.
 ## 8. Query and serialization optimizations
 
 The optional field-copy policy, plans, template cache, related-key batching and
-inferred query loading live under `aiodrf.contrib.builtin`. Core serializers and
+inferred query loading are django-fastdrf's (`fastdrf._field_copy`,
+`_field_cache`, `_relations`, `fastdrf.prefetch`); aiodrf keeps
+`contrib.builtin.list_prefetch` and `concurrent`, and `aiodrf.contrib.prefetch`
+remains a compatibility export of `PrefetchListSerializer`. Core serializers and
 generic views retain thin selection points so existing settings and overrides
-continue to work. The public prefetch imports remain compatibility exports.
+continue to work.
 Dynamic field trees are inspected per request. Inferred query paths use a weak-key
 table; clearing replaces that table, and snapshot identity rejects publication
 from an older calculation. Hits and inspection run outside the publication lock.
@@ -409,7 +423,7 @@ integration, not a replacement ORM implementation.
 | Feature | Mechanism | Compatibility boundary |
 | --- | --- | --- |
 | `Meta.auto_prefetch` | Derive relation loading from serializer fields | Keep queryset scoping and request-specific `Prefetch` objects local; custom sources may need explicit plans |
-| `FETCH_MODE` | Select supported Django queryset fetching behavior through `compat` | Version-dependent and off by default; not a new ORM |
+| `FETCH_MODE` | Select supported Django queryset fetching behavior through `compat` | Version-dependent and off by default; a system-check error (`fastdrf.E006`) before Django 6.1; not a new ORM |
 | `CACHE_SERIALIZER_FIELDS` | Cache an unbound static model-field template, deepcopy for each instance by default | aiodrf model serializer bases only; dynamic field hooks and runtime model/Meta changes are not a safe template contract |
 | `FIELD_COPY_MODE` | Optional prepared field-copy plans | Defaults to `deepcopy`; `clone` optimizes exact scalar fields, while `compiled` recursively prepares supported nested/container construction. Unknown or custom behavior uses DRF deepcopy. Select through serializer `Meta`, view attributes or settings; no DRF class is patched. |
 | `BATCH_RELATED_LOOKUPS` | Validate eligible to-many primary keys through one `pk__in` query | Preserve input order and first-error behavior; custom relation/queryset behavior stays on DRF |
@@ -470,7 +484,7 @@ Acquire resources inside the producer where possible, and release them in a
 ### 9.2 Typed lifespan state
 
 `asgi.get_asgi_application()` wraps Django for the ASGI lifespan protocol.
-`AIODRF["LIFESPAN"]` accepts a zero-argument async context-manager factory or
+`DJANGO_LIFESPAN` accepts a zero-argument async context-manager factory or
 dotted import path. It enters before startup notifications, publishes its
 yielded value under namespaced application state, and exits after shutdown,
 including failure and cancellation paths. `get_lifespan_state(request, Type)`
@@ -518,7 +532,7 @@ for nonlocal synchronous backends and preserving keys, Vary and cache-control
 semantics. Application code still owns user/tenant cache partitioning. Streaming
 and QUERY are not made safely cacheable by this decorator.
 
-`contrib.async_cache` provides explicit native middleware. Request-local cache
+`aiodrf_async_cache.middleware` provides explicit native middleware. Request-local cache
 snapshots let Django's own middleware decide keys, Vary and cacheability; missing
 reads and recorded writes are awaited against a lifespan-owned backend. The view
 is never replayed. No security policy is copied or process-wide method replaced.
@@ -730,7 +744,7 @@ class PublicArticleSerializer(serializers.ModelSerializer):
 
 Use this through aiodrf generic views or its async serializer operations and
 install the selected extra. Output parity is the global
-`AIODRF["SERIALIZER_BACKEND_PARITY"]` setting, whose default is `"strict"`;
+`FASTDRF["SERIALIZER_BACKEND_PARITY"]` setting, whose default is `"strict"`;
 there is no per-serializer parity option. A later custom representation hook should trigger
 fallback, not disappear behind the compiled output. Test that behavior before
 using compilation on an authorization-dependent field projection.

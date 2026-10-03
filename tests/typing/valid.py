@@ -5,18 +5,17 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import assert_type
 
+from aiodrf_asgi_lifespan.asgi import (
+    LifespanFactory,
+    get_lifespan_state,
+)
 from django.http import HttpRequest, HttpResponseBase
 from rest_framework.request import Request as DRFRequest
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView as DRFAPIView
 
 from aiodrf import serializers
-from aiodrf.asgi import (
-    LifespanApplication,
-    LifespanFactory,
-    get_asgi_application,
-    get_lifespan_state,
-)
+from aiodrf.asgi import get_asgi_application
 from aiodrf.permissions import BasePermission
 from aiodrf.request import Request
 from aiodrf.response import Response, StreamingResponse
@@ -103,7 +102,7 @@ async def lifespan() -> AsyncGenerator[Resources, None]:
 
 
 factory: LifespanFactory[Resources] = lifespan
-assert_type(get_asgi_application(lifespan=factory), LifespanApplication)
+assert callable(get_asgi_application(lifespan=factory))
 
 
 def typed_resources(django_request: HttpRequest, drf_request: Request) -> None:

@@ -37,24 +37,37 @@ def _register_compiled_fields() -> None:
     What ``SERIALIZER_BACKEND`` compiles of these packages: ``ObjectId``
     columns read by Django's descriptor, django-mongodb-extensions'
     ``ObjectIdField`` (``str(value)``) and ``ObjectIdPrimaryKeyRelatedField``.
+    The same functions each time: registering again changes nothing.
     """
-    from bson import ObjectId
     from django_mongodb_backend import fields as mongodb_fields
-
-    from aiodrf.contrib import compiler
-    from aiodrf.contrib.mongodb.fields import ObjectIdPrimaryKeyRelatedField
-
-    compiler._DJANGO_READ_FIELDS.update(
-        (mongodb_fields.ObjectIdAutoField, mongodb_fields.ObjectIdField)
+    from fastdrf.registry import (
+        register_field,
+        register_key_field,
+        register_model_field,
     )
 
-    def object_id_key(value: object) -> object:
-        # ObjectIdPrimaryKeyRelatedField.to_representation of a related key.
-        return str(value) if isinstance(value, ObjectId) else value
+    from aiodrf.contrib.mongodb.fields import ObjectIdPrimaryKeyRelatedField
 
-    compiler._KEY_REPRESENTATIONS[ObjectIdPrimaryKeyRelatedField] = object_id_key
+    register_model_field(mongodb_fields.ObjectIdAutoField)
+    register_model_field(mongodb_fields.ObjectIdField)
+    register_key_field(ObjectIdPrimaryKeyRelatedField, representation=_object_id_keys)
     try:
         from django_mongodb_extensions.rest_framework import ObjectIdField
     except ImportError:
         return
-    compiler._FIELD_REPRESENTATIONS[ObjectIdField] = str
+    register_field(ObjectIdField, representation=_strings)
+
+
+def _object_id_key(value: object) -> object:
+    # ObjectIdPrimaryKeyRelatedField.to_representation of a related key.
+    from bson import ObjectId
+
+    return str(value) if isinstance(value, ObjectId) else value
+
+
+def _object_id_keys(field: object) -> Any:
+    return _object_id_key
+
+
+def _strings(field: object) -> Any:
+    return str

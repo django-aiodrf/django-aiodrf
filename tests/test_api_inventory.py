@@ -5,14 +5,10 @@ from pathlib import Path
 import pytest
 
 from aiodrf import utils
-from aiodrf.contrib import convert
 
 INVENTORY = (Path(__file__).parent.parent / "docs/guides/releasing.md").read_text()
 EXTENSION_ROW = next(
     line for line in INVENTORY.splitlines() if line.startswith("| Extension API")
-)
-INTERNAL_ROW = next(
-    line for line in INVENTORY.splitlines() if line.startswith("| Internal")
 )
 
 
@@ -35,16 +31,6 @@ def test_the_extension_api_of_utils_is_the_documented_one():
 def test_internal_names_stay_importable_outside_all(name):
     assert name not in utils.__all__
     assert hasattr(utils, name)
-
-
-def test_the_converters_description_is_internal():
-    for name in ("Schema", "Spec", "T"):
-        assert name not in convert.__all__
-        assert hasattr(convert, name)
-        assert f"`{name}`" in INTERNAL_ROW
-    assert {"from_pydantic", "from_msgspec", "from_serializer", "to_drf"} <= set(
-        convert.__all__
-    )
 
 
 def test_the_decorators_module_exports_drfs_decorators():

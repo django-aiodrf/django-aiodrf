@@ -90,7 +90,7 @@ async def test_explicit_inline_mode_preserves_field_construction_policy():
         async def ato_representation(self, obj):
             return await super().ato_representation(obj)
 
-    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}):
+    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}, FASTDRF={}):
         assert await Item({"value": 1}).adata() == {"value": 1}
     assert built == [threading.get_ident()]
 

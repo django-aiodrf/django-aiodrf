@@ -1,5 +1,10 @@
 # Managed ASGI resources
 
+The lifespan support is the
+[aiodrf-asgi-lifespan](https://github.com/django-aiodrf/aiodrf-asgi-lifespan)
+package: install `django-aiodrf[lifespan]`. It provides the resource access,
+the startup and shutdown signals and the test helper used below.
+
 Use a Python async context manager for resources that must be opened, used and
 closed on the same event loop. It is an opt-in wrapper around Django's ASGI
 application, not a middleware patch, a dependency-injection container or a
@@ -30,12 +35,11 @@ async def lifespan() -> AsyncGenerator[Resources, None]:
         yield Resources(http=http)
 ```
 
-Add the setting to the existing `AIODRF` dictionary:
+Name it in the top-level `DJANGO_LIFESPAN` setting (not in `AIODRF`):
 
 ```python
-AIODRF = {
-    "LIFESPAN": "project.lifecycle.lifespan",
-}
+# settings.py
+DJANGO_LIFESPAN = "project.lifecycle.lifespan"
 ```
 
 Use the wrapper in the project's `asgi.py`, after its `DJANGO_SETTINGS_MODULE`
@@ -60,14 +64,15 @@ application = get_asgi_application(lifespan=lifespan)
 application_without_context = get_asgi_application(lifespan=None)
 ```
 
-`LifespanApplication(application, lifespan=lifespan)` wraps another ASGI
+`aiodrf_asgi_lifespan.asgi.LifespanApplication(application, lifespan=lifespan)`
+wraps another ASGI
 application directly and does not read settings. Only the root wrapper should
 own the lifecycle; do not wrap the same factory again at nested routing layers.
 
 ## Access from a view
 
 ```python
-from aiodrf.asgi import get_lifespan_state
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from aiodrf.response import Response
 from aiodrf.views import APIView
 from project.lifecycle import Resources
@@ -108,7 +113,8 @@ from dataclasses import dataclass
 
 import httpx
 
-from aiodrf.contrib.async_cache import AsyncCache, cache_lifespan
+from aiodrf_async_cache.middleware import AsyncCache
+from aiodrf_async_cache.lifespan import cache_lifespan
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,9 +236,9 @@ Moving to aiodrf:
 
 | django-asgi-lifespan | aiodrf |
 | --- | --- |
-| `register_lifespan_manager(cm)` in `AppConfig.ready()` | one `AIODRF["LIFESPAN"]` factory that enters each resource in an `AsyncExitStack` ([above](#compose-multiple-resources)) |
+| `register_lifespan_manager(cm)` in `AppConfig.ready()` | one `DJANGO_LIFESPAN` factory that enters each resource in an `AsyncExitStack` ([above](#compose-multiple-resources)) |
 | `request.state["client"]` | `get_lifespan_state(request, Resources).client` |
-| `django_asgi_lifespan.signals.asgi_startup` / `asgi_shutdown` | `aiodrf.signals.asgi_startup` / `asgi_shutdown`: different signals, so receivers are connected again |
+| `django_asgi_lifespan.signals.asgi_startup` / `asgi_shutdown` | `aiodrf_asgi_lifespan.signals.asgi_startup` / `asgi_shutdown`: different signals, so receivers are connected again |
 
 The differences are in the failure contract above: aiodrf enters the
 resources before the startup signal and in a fixed order, closes the ones
@@ -242,14 +248,15 @@ refuses a request that kept its state past shutdown.
 
 ## Tests
 
-`aiodrf.test.lifespan()` runs the lifespan around a block as an ASGI server
-would: it enters `AIODRF["LIFESPAN"]` (or the factory it is given), sends
+`aiodrf_asgi_lifespan.testing.lifespan()` runs the lifespan around a block as an ASGI server
+would: it enters `DJANGO_LIFESPAN` (or the factory it is given), sends
 `asgi_startup`, and on exit sends `asgi_shutdown` and closes the resources. It
 yields the server's lifespan state; a test client given that state puts a copy
 of it into every request, so `get_lifespan_state()` works in the views:
 
 ```python
-from aiodrf.test import AsyncAPIClient, lifespan
+from aiodrf.test import AsyncAPIClient
+from aiodrf_asgi_lifespan.testing import lifespan
 
 
 async def test_status():

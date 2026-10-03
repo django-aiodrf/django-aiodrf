@@ -106,7 +106,7 @@ def test_utils_import_needs_no_settings():
 def test_field_copy_discovery_does_not_evaluate_lazy_settings():
     result = run("""
         from django.conf import settings
-        from aiodrf.contrib.builtin.field_copy import plan_fields
+        from fastdrf._field_copy import plan_fields
         assert not settings.configured
         assert plan_fields({})() == {}
     """)
@@ -119,7 +119,7 @@ def test_pydantic_input_does_not_import_msgspec():
         from django.conf import settings
         settings.configure(REST_FRAMEWORK={})
         from rest_framework import serializers
-        from aiodrf.contrib.inputs import recognize
+        from fastdrf.inputs import recognize
         class Example(serializers.Serializer):
             value = serializers.IntegerField()
         assert recognize(Example(data={"value": 1}), backend="pydantic") == {"value": 1}
@@ -175,3 +175,42 @@ def test_aiodrf_aio_exposes_its_public_api_and_nothing_else():
         "_save",
         "_validate",
     } == set(aio.__all__)
+
+
+def test_core_asgi_does_not_import_extracted_packages():
+    result = run("""
+        import sys
+        from importlib.abc import MetaPathFinder
+        class BlockOptional(MetaPathFinder):
+            def find_spec(self, fullname, *args):
+                if fullname.split(".")[0] in {"aiodrf_asgi_lifespan", "aiodrf_async_cache"}:
+                    raise ModuleNotFoundError(fullname, name=fullname)
+        sys.meta_path.insert(0, BlockOptional())
+        from django.conf import settings
+        settings.configure(SECRET_KEY="test", INSTALLED_APPS=[], MIDDLEWARE=[])
+        from django.core.handlers.asgi import ASGIHandler
+        from django.core.exceptions import ImproperlyConfigured
+        from aiodrf.asgi import get_asgi_application
+        from aiodrf import serializers, views, test, management
+        # Without the lifespan package, aiodrf answers the protocol itself
+        # (Django refuses it) and passes HTTP to Django's handler.
+        import asyncio
+        application = get_asgi_application()
+        assert isinstance(application.application, ASGIHandler)
+        incoming = asyncio.Queue()
+        incoming.put_nowait({"type": "lifespan.startup"})
+        incoming.put_nowait({"type": "lifespan.shutdown"})
+        sent = []
+        async def send(message):
+            sent.append(message["type"])
+        asyncio.run(application({"type": "lifespan"}, incoming.get, send))
+        assert sent == ["lifespan.startup.complete", "lifespan.shutdown.complete"]
+        assert not {"aiodrf_asgi_lifespan", "aiodrf_async_cache"} & set(sys.modules)
+        try:
+            get_asgi_application(lifespan=lambda: None)
+        except ImproperlyConfigured as exc:
+            assert "django-aiodrf[lifespan]" in str(exc)
+        else:
+            raise AssertionError("Missing optional dependency was not reported")
+    """)
+    assert result.returncode == 0, result.stderr

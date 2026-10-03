@@ -22,10 +22,10 @@ from django.db.models import prefetch_related_objects
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from aiodrf.test import count_hops
 from tests.testapp.models import Author, Book, Edition, Tag
 
@@ -81,7 +81,7 @@ def compare(factory, backend, parity="strict", fallback="drf"):
         "SERIALIZER_BACKEND_PARITY": parity,
         "SERIALIZER_BACKEND_FALLBACK": fallback,
     }
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         assert outcome(lambda: aio.try_data(factory())) == drf
     return drf
 
@@ -111,7 +111,7 @@ def test_a_mapping_is_a_reason_not_to_compile(backend):
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
     for serializer in (Shelved({"title": "t"}), Shelved([{}], many=True)):
         with (
-            override_settings(AIODRF=settings),
+            override_settings(FASTDRF=settings, AIODRF={}),
             pytest.raises(ImproperlyConfigured, match="dict, not a Book"),
         ):
             aio.try_data(serializer)
@@ -139,7 +139,7 @@ def test_model_instances_compile(shelf, backend, fallback):
         with CaptureQueriesContext(connection) as drf_queries:
             drf = Shelved(queryset.all(), many=True).data
         with (
-            override_settings(AIODRF=settings),
+            override_settings(FASTDRF=settings, AIODRF={}),
             CaptureQueriesContext(connection) as queries,
         ):
             assert aio.try_data(Shelved(queryset.all(), many=True)) == drf
@@ -318,7 +318,7 @@ def test_a_source_the_compiled_class_cannot_read_is_drfs_whatever_the_fallback(
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
     for source, many in ((dangling(), False), ([dangling()], True)):
         expected = BookOut(source, many=many).data
-        with override_settings(AIODRF=settings):
+        with override_settings(FASTDRF=settings, AIODRF={}):
             assert aio.try_data(BookOut(source, many=many)) == expected
 
 
@@ -336,7 +336,7 @@ def test_fast_parity_raises_where_the_compiled_class_cannot_read(db, backend):
         BookOut(Book(pk=1, title=5, pages=1, author=Author(pk=2, name="Ada"))),
         Plain(SimpleNamespace(title="t")),
     ):
-        with override_settings(AIODRF=settings), pytest.raises(error):
+        with override_settings(FASTDRF=settings, AIODRF={}), pytest.raises(error):
             aio.try_data(serializer)
 
 
@@ -424,7 +424,7 @@ class Titles(drf_serializers.Serializer):
 async def represented(serializer_class, source, backend, parity="strict", *, warm=None):
     """``aio.data`` for a class warmed with ``warm``: the output and its hops."""
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_PARITY": parity}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         await aio.data(serializer_class(source if warm is None else warm))
         with count_hops() as hops:
             data = await aio.data(serializer_class(source))

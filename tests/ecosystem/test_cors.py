@@ -66,6 +66,7 @@ async def test_cors_before_between_and_after_grouped_middleware(position):
         ROOT_URLCONF=__name__,
         MIDDLEWARE=middleware,
         AIODRF={"UNSAFE_SYNC_MIDDLEWARE": True},
+        FASTDRF={},
         CORS_ALLOWED_ORIGINS=[ORIGIN],
     ):
         client = AsyncAPIClient()

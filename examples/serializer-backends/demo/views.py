@@ -68,7 +68,7 @@ class SelectedArticles(Articles):
 
 class Profile(APIView):
     async def get(self, request):
-        return Response({"profile": settings.PROFILE, "options": settings.AIODRF})
+        return Response({"profile": settings.PROFILE, "options": settings.FASTDRF})
 
 
 router = SimpleRouter()

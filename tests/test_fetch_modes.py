@@ -33,7 +33,7 @@ class FetchPolicies(TestCase):
             author = Author.objects.create(name=str(number))
             Book.objects.create(title=str(number), isbn=str(number), author=author)
 
-    @override_settings(AIODRF={"FETCH_MODE": "peers"})
+    @override_settings(FASTDRF={"FETCH_MODE": "peers"}, AIODRF={})
     def test_generic_queryset_batches_missing_foreign_keys(self):
         view = Books()
         with self.assertNumQueries(2):

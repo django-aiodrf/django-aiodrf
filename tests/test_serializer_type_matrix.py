@@ -22,14 +22,14 @@ import msgspec
 import pydantic
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from fastdrf import compiler, inputs
+from fastdrf.msgspec.compiler import build as build_msgspec
+from fastdrf.pydantic.compiler import build as build_pydantic
 from rest_framework import fields, relations, serializers
 from rest_framework.renderers import JSONRenderer
 from typing_extensions import TypedDict
 
-from aiodrf.contrib import compiler, inputs
-from aiodrf.contrib.msgspec.compiler import build as build_msgspec
 from aiodrf.contrib.msgspec.serializers import serializer_for as msgspec_serializer
-from aiodrf.contrib.pydantic.compiler import build as build_pydantic
 from aiodrf.contrib.pydantic.serializers import serializer_for as pydantic_serializer
 from tests.test_inputs import exact
 from tests.testapp.models import Author

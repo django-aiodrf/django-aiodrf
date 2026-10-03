@@ -16,8 +16,8 @@ guarantee. Examples requiring services are in
 
 | Integration | Upstream documentation | aiodrf scope |
 | --- | --- | --- |
-| `contrib.redis` | [redis-py asyncio](https://redis.readthedocs.io/en/stable/examples/asyncio_examples.html), [retry configuration](https://redis.readthedocs.io/en/stable/retry.html) | Native cache operations and pool ownership; [cache guide](../guides/async-cache.md) |
-| `contrib.valkey` | [django-valkey async backend](https://django-valkey.readthedocs.io/en/latest/async/configurations/), [valkey-py connections](https://valkey-py.readthedocs.io/en/stable/connections.html), [retries](https://valkey-py.readthedocs.io/en/stable/retry.html) | Instance-owned vendor pools, or the separate native contrib backend; [resilience](../guides/cache-resilience.md) |
+| `aiodrf_async_cache.redis` | [redis-py asyncio](https://redis.readthedocs.io/en/stable/examples/asyncio_examples.html), [retry configuration](https://redis.readthedocs.io/en/stable/retry.html) | Native cache operations and pool ownership; [cache guide](../guides/async-cache.md) |
+| `aiodrf_async_cache.valkey` | [django-valkey async backend](https://django-valkey.readthedocs.io/en/latest/async/configurations/), [valkey-py connections](https://valkey-py.readthedocs.io/en/stable/connections.html), [retries](https://valkey-py.readthedocs.io/en/stable/retry.html) | Instance-owned vendor pools, or the separate native contrib backend; [resilience](../guides/cache-resilience.md) |
 | Django cache interoperability | [Django cache framework](https://docs.djangoproject.com/en/stable/topics/cache/), [django-redis](https://github.com/jazzband/django-redis) | Synchronous consumers and async thread-adapted calls; no replacement of vendor plugin APIs |
 | `contrib.opensearch` | [django-opensearch-dsl](https://django-opensearch-dsl.readthedocs.io/en/latest/), [opensearch-py](https://opensearch-project.github.io/opensearch-py/) | Document preparation and native client writes; [NoSQL guide](../guides/async-nosql.md) |
 | Elasticsearch examples | [django-elasticsearch-dsl](https://django-elasticsearch-dsl.readthedocs.io/en/latest/), [Elastic Python client and integrated DSL](https://www.elastic.co/docs/reference/elasticsearch/clients/python) | Django indexing and separately owned native async clients; not OpenSearch clients |
@@ -29,15 +29,18 @@ guarantee. Examples requiring services are in
 
 | Integration | Upstream documentation | aiodrf scope |
 | --- | --- | --- |
-| `contrib.msgspec`, `cache_codecs.MsgspecCodec` | [msgspec](https://msgspec.dev/) | Explicit typed schemas, eligible DRF compilation and typed cache values; [serializer contracts](../guides/msgspec-pydantic.md) |
-| `contrib.pydantic`, `cache_codecs.PydanticCodec` | [Pydantic](https://docs.pydantic.dev/latest/) | Explicit models/TypeAdapter, eligible DRF compilation and typed cache values; vendor field hooks remain synchronous |
-| `contrib.spectacular` | [drf-spectacular](https://drf-spectacular.readthedocs.io/en/latest/) | Schema extensions, QUERY handling and [streaming schemas](../guides/streaming-schema.md) |
+| `contrib.msgspec`, `cache_codecs.MsgspecCodec` | [msgspec](https://msgspec.dev/) | Explicit typed schemas and typed cache values (DRF compilation: django-fastdrf); [serializer contracts](../guides/msgspec-pydantic.md) |
+| `contrib.pydantic`, `fastdrf.codecs.PydanticCodec` | [Pydantic](https://docs.pydantic.dev/latest/) | Explicit models/TypeAdapter and typed cache values (DRF compilation: django-fastdrf); vendor field hooks remain synchronous |
+| `contrib.spectacular` | [drf-spectacular](https://drf-spectacular.readthedocs.io/en/latest/) | Schema extensions (with django-fastdrf's `fastdrf.spectacular` for schema serializers), QUERY handling and [streaming schemas](../guides/streaming-schema.md) |
 | `contrib.django_filters` | [django-filter](https://django-filter.readthedocs.io/en/stable/) | Awaitable filter backend with the vendor's filtering semantics; [integration](../guides/ecosystem.md#django-filter) |
 | rest-filters compatibility | [rest-filters](https://github.com/realsuayip/rest-filters) | Tested vendor backend, not a copied filtering implementation; [integration](../guides/ecosystem.md#rest-filters) |
 
-`contrib.builtin` optimizations and the compiler's eligibility rules are aiodrf
-implementations, not vendor features. Their configuration belongs in the
-[settings reference](settings.md) and [optimization guide](../guides/serializer-optimization.md).
+The compiler, input recognition, field caching and copying and related
+lookups are django-fastdrf's, a dependency of aiodrf, configured with
+`FASTDRF` ([settings reference](settings.md#django-fastdrf-settings-fastdrf),
+[optimization guide](../guides/serializer-optimization.md)). aiodrf's own
+`contrib.builtin` modules (`list_prefetch`, `concurrent`) are aiodrf
+implementations, not vendor features.
 
 ## Authentication and permissions
 
@@ -59,7 +62,7 @@ implementations, not vendor features. Their configuration belongs in the
 | `contrib.adrf_compat` | [ADRF](https://github.com/em1208/adrf) | Explicit [migration shim](../guides/migration-from-adrf.md), not a default dependency or a runtime performance extension |
 | Codemod extra | [LibCST](https://libcst.readthedocs.io/en/latest/) | Migration source transformations, not runtime request processing |
 
-`contrib.convert` generates schema source from DRF, msgspec or Pydantic
+django-fastdrf's converter (`fastdrf.convert`, `manage.py fastdrf_convert` with `"fastdrf"` in `INSTALLED_APPS`) generates schema source from DRF, msgspec or Pydantic
 definitions; it is separate from the LibCST migration codemod. See
 [management commands](../guides/management-commands.md) and the serializer guide.
 

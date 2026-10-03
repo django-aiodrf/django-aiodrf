@@ -11,7 +11,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("profile", list(PROFILES))
 async def test_profiles_preserve_this_models_output(client, profile):
     tag = await Tag.objects.acreate(name=profile)
-    with override_settings(AIODRF=PROFILES[profile]):
+    with override_settings(FASTDRF=PROFILES[profile]):
         created = await client.post(
             "/articles/", json={"title": "Article", "tags": [tag.pk]}
         )
@@ -32,7 +32,7 @@ async def test_profiles_preserve_this_models_output(client, profile):
 
 
 async def test_view_scoped_copy_plan_without_global_tuning(client):
-    with override_settings(AIODRF=PROFILES["normal"]):
+    with override_settings(FASTDRF=PROFILES["normal"]):
         response = await client.post(
             "/selected-articles/", json={"title": "Scoped", "tags": []}
         )

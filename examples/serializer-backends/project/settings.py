@@ -56,4 +56,5 @@ PROFILES = {
 PROFILE = os.environ.get("AIODRF_EXAMPLE_PROFILE", "normal")
 PROFILES["tuned-clone"] = {**PROFILES["tuned"], "FIELD_COPY_MODE": "clone"}
 PROFILES["tuned-compiled"] = {**PROFILES["tuned"], "FIELD_COPY_MODE": "compiled"}
-AIODRF = PROFILES[PROFILE]
+# The profiles are django-fastdrf's settings, which aiodrf builds on.
+FASTDRF = PROFILES[PROFILE]

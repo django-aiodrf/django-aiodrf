@@ -19,6 +19,11 @@ The distribution name is `django-aiodrf`; imports use `aiodrf`.
 
 ## Installation
 
+Optional JSON transports use `django-aiodrf[pydantic]` or
+`django-aiodrf[orjson]`. Select fastdrf’s parser and renderer classes explicitly
+in `REST_FRAMEWORK` or on the view; see the
+[JSON transport guide](https://github.com/django-aiodrf/django-aiodrf/blob/main/docs/guides/msgspec-pydantic.md#3-json-renderer-and-parser).
+
 For this development checkout:
 
 ```console
@@ -52,7 +57,10 @@ INSTALLED_APPS = [
 
 Keep authentication, permission, parser and renderer configuration in
 `REST_FRAMEWORK`. Optional aiodrf behavior is configured through `AIODRF`;
-the default configuration requires no optimization settings.
+the default configuration requires no optimization settings. The serializer
+optimizations (compiled msgspec, pydantic or Python output, input recognition,
+field caching) come from [django-fastdrf](https://github.com/ctolon/django-fastdrf),
+a dependency of aiodrf, and are configured through its `FASTDRF` setting.
 
 ## Basic usage
 
@@ -140,11 +148,12 @@ the test sessions and the code standards.
 
 ## Credits
 
-django-aiodrf builds on Django REST framework. Thank you to the DRF team and
-contributors for its API design, implementation, documentation and compatibility
-tests, and to the Django and asgiref contributors for the request handling and
-async infrastructure it relies on. Adapted source code keeps its license notices
-and attribution.
+django-aiodrf builds on the foundations of Django REST framework, Django, and asgiref.
 
-django-aiodrf is an independent project. It is not part of Django or DRF, nor
-endorsed by them.
+We gratefully acknowledge the DRF team and contributors for their API design, implementation, documentation, and extensive compatibility test suite, as well as the Django and asgiref contributors for the request-handling and asynchronous infrastructure on which this project relies.
+
+Portions of source code adapted from these projects retain the applicable copyright notices, license terms, and attribution as required by their respective licenses.
+Native async cache backends are distributed as `aiodrf-async-cache`; lifespan
+resources, signals and the testing helper as `aiodrf-asgi-lifespan` (the
+`django-aiodrf[lifespan]` extra). Their source packages are under `forks/`.
+Use the top-level `DJANGO_LIFESPAN` setting for the resource factory.

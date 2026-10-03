@@ -13,9 +13,6 @@ if TYPE_CHECKING:
 
 DJANGO_VERSION = django.VERSION[:2]
 DRF_VERSION = tuple(int(part) for part in rest_framework.VERSION.split(".")[:2])
-# DefaultContentNegotiation.get_accept_list reads ``request.headers`` since
-# DRF 3.18 and ``request.META`` before. TODO: remove with DRF 3.17.
-DRF_ACCEPT_FROM_HEADERS = DRF_VERSION >= (3, 18)
 # DRF 3.17 added ``BigIntegerField`` (ModelSerializer's field for the big
 # integer model fields); the class, or None. TODO: remove with DRF 3.16.
 BigIntegerField = getattr(rest_framework.fields, "BigIntegerField", None)
@@ -27,8 +24,6 @@ try:  # Django 6.1+
     from django.db.models import FETCH_PEERS, FETCH_RAISE
 except ImportError:  # pragma: no cover - depends on the Django version
     FETCH_PEERS = FETCH_RAISE = None  # type: ignore[assignment]
-# TODO: remove with Django 6.0, the last version without fetch modes.
-DJANGO_HAS_FETCH_MODES = FETCH_PEERS is not None
 
 # Kept as a compatibility export for consumers on the supported Django range.
 try:  # Django 6.1+

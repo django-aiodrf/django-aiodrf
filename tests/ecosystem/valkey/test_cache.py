@@ -8,6 +8,8 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
+from aiodrf_async_cache.django_valkey import LifespanConnectionFactory
 from asgi_lifespan import LifespanManager
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -19,8 +21,7 @@ from django_valkey.pool import ConnectionFactory
 from valkey.asyncio.connection import BlockingConnectionPool, ConnectionPool
 from valkey.exceptions import ConnectionError as ValkeyConnectionError
 
-from aiodrf.asgi import get_asgi_application, get_lifespan_state
-from aiodrf.contrib.valkey import LifespanConnectionFactory
+from aiodrf.asgi import get_asgi_application
 from aiodrf.response import Response
 from aiodrf.views import APIView
 
@@ -29,7 +30,7 @@ URL = os.environ.get("AIODRF_TEST_VALKEY_URL")
 
 @pytest.mark.skipif(not URL, reason="Requires a dedicated Valkey test service")
 async def test_contrib_backend_awaits_key_codec_and_factory_callbacks():
-    from aiodrf.contrib.valkey import AsyncValkeyCache as NativeCache
+    from aiodrf_async_cache.valkey import AsyncValkeyCache as NativeCache
 
     class Codec:
         async def dumps(self, value):
@@ -70,7 +71,7 @@ def config(prefix):
         "LOCATION": URL or "valkey://127.0.0.1:6381/14",
         "KEY_PREFIX": prefix,
         "OPTIONS": {
-            "CONNECTION_FACTORY": "aiodrf.contrib.valkey.LifespanConnectionFactory",
+            "CONNECTION_FACTORY": "aiodrf_async_cache.django_valkey.LifespanConnectionFactory",
             "CONNECTION_POOL_CLASS": "valkey.asyncio.connection.BlockingConnectionPool",
             "CONNECTION_POOL_KWARGS": {"max_connections": 8, "timeout": 2},
             "SOCKET_TIMEOUT": 2,
@@ -161,7 +162,8 @@ urlpatterns = [path("cache/", CachedValue.as_view())]
 async def test_native_operations_through_asgi_and_shutdown():
     with override_settings(
         ROOT_URLCONF=__name__,
-        AIODRF={**getattr(settings, "AIODRF", {}), "LIFESPAN": lifespan},
+        AIODRF={**getattr(settings, "AIODRF", {})},
+        DJANGO_LIFESPAN=lifespan,
     ):
         application = get_asgi_application()
         # ASGI lifespan state is copied into each request by LifespanManager.
@@ -266,7 +268,7 @@ async def test_repeated_requests_reuse_one_pool_and_startup_does_not_connect():
     "backend",
     [
         "django_valkey.async_cache.cache.AsyncValkeyCache",
-        "aiodrf.contrib.valkey.AsyncValkeyCache",
+        "aiodrf_async_cache.valkey.AsyncValkeyCache",
     ],
 )
 async def test_page_middleware_and_lifespan_share_native_pool(backend):
@@ -274,6 +276,6 @@ async def test_page_middleware_and_lifespan_share_native_pool(backend):
 
     params = config("valkey-pages-" + uuid4().hex)
     params["BACKEND"] = backend
-    if backend.startswith("aiodrf."):
+    if backend.startswith("aiodrf_async_cache."):
         params["OPTIONS"] = {"socket_connect_timeout": 2, "socket_timeout": 2}
     await check_page_cache(params, "django_valkey.cache.ValkeyCache")

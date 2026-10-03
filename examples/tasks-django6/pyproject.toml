@@ -2,7 +2,7 @@
 name = "aiodrf-example-tasks-django6"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["django-aiodrf","uvicorn>=0.30","httpx>=0.27","Django>=6.0,<6.2"]
+dependencies = ["aiodrf-asgi-lifespan>=0.1,<0.2", "django-aiodrf","uvicorn>=0.30","httpx>=0.27","Django>=6.0,<6.2"]
 
 [tool.uv]
 package = false

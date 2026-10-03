@@ -6,6 +6,167 @@ consolidated here rather than represented as separate published releases.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-03
+
+Timings in this section were measured on the machine described in
+[the performance guide](https://github.com/django-aiodrf/django-aiodrf/blob/main/docs/guides/performance.md#environment-of-the-published-measurements);
+other hardware gives other times.
+
+### Upgrading
+
+aiodrf now depends on [django-fastdrf](https://github.com/ctolon/django-fastdrf)
+0.4, which maintains the serializer optimizations aiodrf used to carry a copy
+of. Their settings are read from django-fastdrf's `FASTDRF` setting: move
+`SERIALIZER_BACKEND`, `SERIALIZER_BACKEND_PARITY`,
+`SERIALIZER_BACKEND_FALLBACK`, `ALLOWED_SERIALIZER_BACKENDS`,
+`CACHE_SERIALIZER_FIELDS`, `FIELD_COPY_MODE`, `BATCH_RELATED_LOOKUPS` and
+`FETCH_MODE` from `AIODRF` to `FASTDRF`. One of them left in `AIODRF` raises
+`ImproperlyConfigured` when the settings are first read.
+
+The code is django-fastdrf's, and aiodrf no longer re-exports it: import it
+from django-fastdrf.
+
+| Before | Now |
+| --- | --- |
+| `aiodrf.contrib.msgspec.renderers.MsgspecJSONRenderer` (in `REST_FRAMEWORK`) | `fastdrf.msgspec.renderers.MsgspecJSONRenderer` |
+| `aiodrf.contrib.msgspec.parsers.MsgspecJSONParser` (in `REST_FRAMEWORK`) | `fastdrf.msgspec.parsers.MsgspecJSONParser` |
+| `MsgspecJSONRenderer`, `MsgspecJSONParser` from `aiodrf.contrib.msgspec` | the two modules above |
+| `aiodrf.response.DataResponse` | `fastdrf.response.DataResponse` |
+| `aiodrf.prefetch`, `aiodrf.contrib.builtin.prefetch` | `fastdrf.prefetch` |
+| `aiodrf.contrib.cache_codecs.PydanticCodec` | `fastdrf.codecs.PydanticCodec` |
+| `aiodrf.contrib.compiler`, `inputs`, `convert` | `fastdrf.compiler`, `fastdrf.inputs`, `fastdrf.convert` |
+| `aiodrf.contrib.msgspec.compiler`, `aiodrf.contrib.pydantic.compiler` | `fastdrf.msgspec.compiler`, `fastdrf.pydantic.compiler` |
+| `FieldSpec`, `BoundedCache`, `SCHEMA_CACHE_SIZE`, `SchemaBackend`, `build_serializer`, `error_detail`, `is_schema_class`, `raise_validation_error` from `aiodrf.contrib.typed` | `fastdrf.typed` |
+| `serializer_kind`, `require_allowed` from `aiodrf.backends` | `fastdrf.typed` |
+| `MsgspecBackend`, `PydanticBackend` from `aiodrf.contrib.*.serializers` | `fastdrf.msgspec.serializers`, `fastdrf.pydantic.serializers` |
+| `WeakChildMixin`, `bind_child_weakly` from `aiodrf.contrib.list_serializers` | `fastdrf.list_serializers` |
+
+The native Redis and Valkey caches and the ASGI lifespan support are
+separate distributions now, which projects without DRF can use too:
+[aiodrf-async-cache](https://github.com/django-aiodrf/aiodrf-async-cache) and
+[aiodrf-asgi-lifespan](https://github.com/django-aiodrf/aiodrf-asgi-lifespan).
+Install the first, and aiodrf's `lifespan` extra for the second. The
+`AIODRF["LIFESPAN"]` setting is now the top-level `DJANGO_LIFESPAN` setting.
+
+| Before | Now |
+| --- | --- |
+| `aiodrf.contrib.redis.AsyncRedisCache` | `aiodrf_async_cache.redis.AsyncRedisCache` |
+| `aiodrf.contrib.valkey.AsyncValkeyCache` | `aiodrf_async_cache.valkey.AsyncValkeyCache` |
+| `aiodrf.contrib.valkey.LifespanConnectionFactory` | `aiodrf_async_cache.django_valkey.LifespanConnectionFactory` |
+| `AsyncCacheMiddleware`, `AsyncFetchFromCacheMiddleware`, `AsyncUpdateCacheMiddleware`, `AsyncCache` from `aiodrf.contrib.async_cache` | `aiodrf_async_cache.middleware` |
+| `aiodrf.contrib.async_cache.cache_lifespan` | `aiodrf_async_cache.lifespan.cache_lifespan` |
+| `aiodrf.contrib.cache_codecs.MsgspecCodec` | `aiodrf_async_cache.codecs.MsgspecCodec` |
+| `aiodrf.signals.asgi_startup`, `asgi_shutdown` | `aiodrf_asgi_lifespan.signals` |
+| `aiodrf.asgi.get_lifespan_state`, `LifespanApplication` | `aiodrf_asgi_lifespan.asgi` |
+| `aiodrf.test.lifespan` | `aiodrf_asgi_lifespan.testing.lifespan` |
+| `AIODRF["LIFESPAN"]` | `DJANGO_LIFESPAN` |
+
+`aiodrf.asgi.get_asgi_application()` stays: it answers the ASGI lifespan
+protocol as before, sends the startup and shutdown signals when
+aiodrf-asgi-lifespan is installed, and adds `AIODRF["REQUEST_THREADS"]`.
+`AsyncAPIClient(lifespan=...)` takes the state that
+`aiodrf_asgi_lifespan.testing.lifespan()` yields.
+
+The other `aiodrf.contrib.builtin` modules of field caching, field copying,
+related lookups and the python backend are django-fastdrf's internals.
+`manage.py aiodrf_convert` is gone: add `"fastdrf"` to `INSTALLED_APPS` and run
+`manage.py fastdrf_convert`, which converts aiodrf's serializers too.
+
+### Added
+
+- django-fastdrf's `fastdrf.registry` and its `fastdrf.contrib`
+  applications (django-phonenumber-field, django-countries, django-money)
+  compile the fields of other packages and of the project in aiodrf's
+  serializers too, synchronous and asynchronous alike.
+- django-fastdrf's delegated fields (`FASTDRF["DELEGATE_FIELDS"]`,
+  `Meta.delegate_fields`): `SerializerMethodField` and the other fields a
+  backend cannot compile run their own code inside the compiled output. In
+  aiodrf's views that output is produced where DRF's representation would
+  run: in a worker thread with `REPRESENTATION_MODE = "thread"` (the
+  default), since a delegated field runs the project's code.
+- aiodrf registers django-fastdrf's `fastdrf.I001` hint with its settings
+  check when `"fastdrf"` is not in `INSTALLED_APPS`.
+- A renderer registered with `fastdrf.registry.register_data_renderer()`
+  renders on the event loop only when it is declared pure
+  (`register_pure`, `INLINE_RENDERERS`); otherwise in a thread, like any
+  other renderer of the project's.
+- django-fastdrf's `PydanticJSONParser`, `PydanticJSONRenderer`,
+  `ORJSONParser` and `ORJSONRenderer` work in asynchronous views,
+  `DataResponse` and streamed responses, through DRF's `PARSER_CLASSES` and
+  `RENDERER_CLASSES`. The `orjson` extra installs orjson.
+
+### Changed
+
+- The compiler, input recognition, the converter, field caching and copying,
+  related lookups and auto-prefetch are django-fastdrf's; their
+  `aiodrf.contrib` modules are gone (see Upgrading).
+- django-fastdrf's system checks report the `FASTDRF` settings:
+  `fastdrf.E004` replaces `aiodrf.E004` (a backend that is not installed),
+  and a `FETCH_MODE` on Django before 6.1 is the error `fastdrf.E006`
+  instead of the warning `aiodrf.W009`.
+- The schema serializers (`MsgspecSerializer`, `PydanticSerializer`,
+  `SchemaSerializer`, `adapt()`), most of
+  `manage.py aiodrf_inspect_serializers`, the class caches and the
+  serializer field caching are django-fastdrf's, on aiodrf's asynchronous
+  bases. An error about a pydantic.v1 model or an `ALLOWED_SERIALIZER_BACKENDS`
+  mismatch now names django-fastdrf's serializers and `FASTDRF`.
+- The msgspec renderer, the JSON renderer `DataResponse` and the event loop
+  render DRF's renderer with, and `DataResponse` are django-fastdrf's. With
+  `indent=0` in the renderer context, `MsgspecJSONRenderer` now renders DRF's
+  bytes, as for any other indentation, instead of compact output.
+- `manage.py fastdrf_convert` (formerly `aiodrf_convert`) marks what it did
+  not convert with `# TODO(convert): ...` and names the converter, not the
+  command, in the generated module's docstring.
+- `MsgspecJSONRenderer` looks for a single byte before searching the output
+  for non-finite numbers and the U+2028/U+2029 separators: rendering 1,000
+  rows takes about a third of the time when neither is present.
+- Input recognition checks that the request body holds only JSON types
+  without a call per value, skips the surrogate search for ASCII strings, and
+  finishes list, dictionary and nested values with less work per item:
+  recognizing a 100-line body takes about 40% less time.
+- The msgspec backend converts datetime and decimal columns at once, reading
+  the time zone and the decimal context once per column. Values whose
+  conversion could run project code (another time zone class, a string
+  subclass) are still converted row by row, in DRF's order. A list of 1,000
+  rows of seven fields, one datetime and one decimal, takes about 25% less
+  time.
+- The drf-spectacular extension that documents the schema serializers
+  (`MsgspecSerializer`, `PydanticSerializer`, `SchemaViewMixin` views) is
+  django-fastdrf's `fastdrf.spectacular`; aiodrf's application installs it
+  with its own extensions, so a project changes nothing.
+
+### Fixed
+
+- With `REQUEST_THREADS`, the request threads are closed before the
+  lifespan's resources, which code running in them may still use.
+- With django-fastdrf 0.4, `QueryOptimizationMixin` no longer joins a
+  relation that the view's queryset prefetches with a filtered `Prefetch`:
+  the join made Django skip the `Prefetch`, and rows its filter left out
+  (another user's related object) were in the response. Nor does it join a
+  foreign key the queryset defers (`only()`, `defer()`, also by its column
+  name), which raised `FieldError`, nor derive a join for a field reading a
+  foreign key's column (`author_id`).
+- With django-fastdrf 0.4, `BATCH_RELATED_LOOKUPS` reports DRF's validation
+  error for a relation queryset that finds nothing (`none()`) instead of
+  raising `EmptyResultSet` on large input, leaves querysets with a window
+  annotation to DRF (their values are computed per item), and looks a
+  repeated item up as DRF does, so that its mutable values are its own.
+- With django-fastdrf 0.4, input recognition leaves to DRF a serializer
+  whose instance (or a nested list serializer's) was given a validation
+  hook of the project's, such as `run_child_validation` or `set_value`.
+- `.data` of a msgspec or pydantic serializer after `is_valid()` is what
+  `validate()` returned, as in DRF, not the input read before it; a list
+  no longer runs the schema's `__post_init__` a second time.
+- With a compiled backend, a list serializer whose own representation is
+  awaited (`PrefetchListSerializer.aprefetch`, a `ConcurrentListSerializer`)
+  was skipped when its child compiled: the compiled output was returned
+  without the prefetch or the per-item serializers.
+- With `OAS_VERSION` 3.1, the schema of a msgspec `Literal` or `Enum` field
+  crashed drf-spectacular's enum postprocessing (`KeyError: 'type'`); enum
+  schemas now carry their JSON type.
+- drf-spectacular no longer publishes the docstring of `SchemaViewMixin` as
+  the description of every operation of a view without its own docstring.
+
 ## [0.0.2] - 2026-10-01
 
 ### Fixed
@@ -128,7 +289,7 @@ consolidated here rather than represented as separate published releases.
 - Contribution, security and AI contribution policies; releases are published
   to PyPI with trusted publishing.
 
-- `aiodrf.test.lifespan()` runs the application's lifespan around a test, and
+- `aiodrf_asgi_lifespan.testing.lifespan()` runs the application's lifespan around a test, and
   `AsyncAPIClient(lifespan=...)`/`AsyncAPIRequestFactory(lifespan=...)` give each
   request a copy of its state, so views using `get_lifespan_state()` can be
   tested with the test clients.

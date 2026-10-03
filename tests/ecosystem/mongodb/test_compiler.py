@@ -10,11 +10,11 @@ import pytest
 from django.test import TestCase, override_settings
 from django.urls import path
 from django_mongodb_extensions.rest_framework import MongoModelSerializer, ObjectIdField
+from fastdrf import compiler, inputs
 from rest_framework import serializers
 from rest_framework import viewsets as drf_viewsets
 
 from aiodrf import viewsets
-from aiodrf.contrib import compiler, inputs
 from aiodrf.contrib.mongodb.fields import ObjectIdPrimaryKeyRelatedField
 from aiodrf.test import AsyncAPIClient
 from tests.ecosystem.mongodb.models import Author, Book, Tag
@@ -136,7 +136,9 @@ urlpatterns = [
 ]
 
 
-@override_settings(ROOT_URLCONF=__name__, AIODRF={"SERIALIZER_BACKEND": "msgspec"})
+@override_settings(
+    ROOT_URLCONF=__name__, FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}
+)
 class CompiledViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -158,3 +160,11 @@ class CompiledViewTests(TestCase):
             response = await client.get(f"/aiodrf/{name}/")
             assert response.status_code == drf.status_code == 200
             assert response.content == drf.content
+
+
+def test_the_registrations_survive_ready_running_again():
+    # Registering the same again changes nothing; another registration of a
+    # class would be refused.
+    from django.apps import apps
+
+    apps.get_app_config("aiodrf_mongodb").ready()
