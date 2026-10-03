@@ -40,7 +40,7 @@ class AdrfCompatWarning(DeprecationWarning):
     """An adrf name is in use; aiodrf's own name is preferred."""
 
 
-# What each adrf module is, in aiodrf.
+# The aiodrf module that replaces each adrf module.
 _REPLACEMENTS = {
     "adrf": "aiodrf",
     "adrf.decorators": "aiodrf.decorators",

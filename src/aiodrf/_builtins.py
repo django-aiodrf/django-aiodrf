@@ -74,8 +74,8 @@ for _paginator in (
 ):
     register_pure_method(_paginator, "get_paginated_response")
 
-# What a throttle that denied is asked next: arithmetic on what its
-# ``allow_request`` stored (``BaseThrottle.wait`` returns None).
+# A denying throttle's ``wait()`` is arithmetic on what its ``allow_request``
+# stored (``BaseThrottle.wait`` returns None).
 for _throttle in (
     throttling.BaseThrottle,
     throttling.SimpleRateThrottle,

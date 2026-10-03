@@ -80,7 +80,7 @@ async def default_data(serializer: Any) -> Any:
     else:
         produce = _loop_data(serializer, source)
         if produce is None and reads_loaded(serializer, source):
-            # What it reads is loaded: DRF's representation cannot query.
+            # Everything it reads is loaded: DRF's representation cannot query.
             produce = try_data
         result = (
             produce(serializer) if produce else await run_sync(try_data)(serializer)

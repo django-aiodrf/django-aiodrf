@@ -26,7 +26,7 @@ Each option is independent of the others. Enable them one at a time and run
 your own tests after each; the sections below describe what each option does,
 how it differs from DRF, where it does not apply and what can go wrong.
 
-## Where each option can be set
+## Option scopes
 
 | Option | Project setting | View | Serializer (`Meta`) | Notes |
 | --- | :-: | :-: | :-: | --- |
@@ -50,7 +50,7 @@ the event loop when it can prove that no query is needed (see
 
 `SERIALIZER_BACKEND`, `SERIALIZER_BACKEND_PARITY`, `SERIALIZER_BACKEND_FALLBACK`
 
-**What it does.** django-fastdrf compiles a serializer's output, and the
+**Behaviour.** django-fastdrf compiles a serializer's output, and the
 validation of well-formed input, to msgspec or Pydantic when the result is known to be
 identical to DRF's; aiodrf runs the compiled code in its async paths.
 `SERIALIZER_BACKEND = "python"` compiles the same output
@@ -86,7 +86,7 @@ and why the others do not.
 
 `CACHE_SERIALIZER_FIELDS`, `FIELD_COPY_MODE`
 
-**What it does.** A `ModelSerializer` whose fields depend only on its class
+**Behaviour.** A `ModelSerializer` whose fields depend only on its class
 builds them once; each instance receives its own copy, made with `deepcopy` or
 with the faster `"clone"` and `"compiled"` copy plans.
 
@@ -106,7 +106,7 @@ first used, for example by a test that patches them, are not picked up. See
 
 `REPRESENTATION_MODE = "inline"`
 
-**What it does.** Serializers produce their output on the event loop instead of
+**Behaviour.** Serializers produce their output on the event loop instead of
 in a worker thread. By enabling it, you state that your serializers only read
 data that is already loaded and never block.
 
@@ -136,7 +136,7 @@ same process.
 
 ## `MsgspecJSONRenderer`
 
-**What it does.** Renders JSON with `msgspec.json`.
+**Behaviour.** Renders JSON with `msgspec.json`.
 
 **Differences from DRF's `JSONRenderer`.** `timedelta` values are rendered as
 ISO 8601 durations instead of seconds and `bytes` as base64; NaN and infinity
@@ -150,7 +150,7 @@ installed.
 
 ## `DataResponse`
 
-**What it does.** A handler returns `fastdrf.response.DataResponse(data, status,
+**Behaviour.** A handler returns `fastdrf.response.DataResponse(data, status,
 headers, content_type)` instead of DRF's `Response`. The view renders it
 immediately with DRF's JSON renderer and returns a Django `HttpResponse` with
 the same status, content and headers DRF would produce.
@@ -174,7 +174,7 @@ a view that is neither an aiodrf view nor uses django-fastdrf's
 
 `REQUEST_THREADS`
 
-**What it does.** For each request, Django's ASGI handler starts a thread to run
+**Behaviour.** For each request, Django's ASGI handler starts a thread to run
 synchronous code and waits for it to finish. With this setting,
 `aiodrf.asgi.get_asgi_application()` keeps those threads for later requests:
 each thread serves one request at a time, and at most the configured number are

@@ -197,7 +197,7 @@ def _async_member(serializer: Any, name: str) -> Any:
     return getattr(aio, f"default_{name}")
 
 
-# What DRF's fields represent values as, none of which can hold a coroutine.
+# Types DRF's fields represent values as; none can hold a coroutine.
 _PLAIN_VALUES = frozenset({str, int, float, bool, type(None)})
 
 # DRF's fields whose representation converts the value (``str()``, ``int()``,

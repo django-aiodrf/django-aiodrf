@@ -154,6 +154,5 @@ We gratefully acknowledge the DRF team and contributors for their API design, im
 
 Portions of source code adapted from these projects retain the applicable copyright notices, license terms, and attribution as required by their respective licenses.
 Native async cache backends are distributed as `aiodrf-async-cache`; lifespan
-resources, signals and the testing helper as `aiodrf-asgi-lifespan` (the
-`django-aiodrf[lifespan]` extra). Their source packages are under `forks/`.
+resources, signals and the testing helper as `aiodrf-asgi-lifespan` (the`django-aiodrf[lifespan]` extra).
 Use the top-level `DJANGO_LIFESPAN` setting for the resource factory.

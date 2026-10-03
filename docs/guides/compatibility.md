@@ -4,7 +4,7 @@ aiodrf aims to behave exactly like DRF at every supported extension point. This
 page explains how that is verified and lists the known differences. It does
 not claim that every DRF subclass works unchanged: test your own extensions.
 
-## How compatibility is verified
+## Verification
 
 - **DRF's own test suite** runs against aiodrf, with DRF's `APIView`, generic
   views, mixins, viewsets and `@api_view` replaced by aiodrf's, for DRF 3.16,

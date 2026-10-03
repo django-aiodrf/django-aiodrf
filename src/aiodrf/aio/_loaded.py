@@ -221,7 +221,7 @@ def _plan(serializer_class: type) -> "_Plan | None":
     return _Plan(model, frozenset(columns), tuple(forward), tuple(many), objects)
 
 
-# What Django's model fields install on the class; anything else under a
+# Descriptors Django's model fields install on the class; anything else under a
 # field's name (a property of a subclass or proxy) is the project's code.
 _DESCRIPTORS = frozenset(
     {

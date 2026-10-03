@@ -31,7 +31,7 @@ worker unit. An overridden asynchronous hook may require additional transitions.
 The bridge resolver preserves application override order; it does not combine
 unrelated hooks merely to reduce a count.
 
-## What the counter does not include
+## Transitions outside the counter
 
 Django signals, middleware adaptation, ORM `a*` wrappers, third-party adapters
 and ordinary response rendering can introduce transitions outside this counter.

@@ -23,15 +23,15 @@ choose compiled output, field caching and copy plans independently.
 
 ## Tools
 
-| Question | Tool | Notes |
+| Measurement | Tool | Notes |
 | --- | --- | --- |
-| Where does a request spend its time? | Pyinstrument | Shows await stacks and the event-loop thread; not a complete profile of worker threads |
-| Which Python functions use CPU, and how often are they called? | Yappi with its CPU clock | Includes worker threads; use call counts and self time, and do not add up overlapping cumulative times |
-| How much native CPU work is done? | `perf stat`, Valgrind Cachegrind | Attach to the application process and exclude start-up; simulated instruction counts are not latency |
-| Where is memory allocated? | Memray | Shows allocation volume and stacks; allocated bytes alone do not indicate a leak |
-| How expensive is building serializer fields? | Timing in your application | Measure the first (cold) construction separately from later (warm) copies |
-| How fast are input validation and output? | Your contract tests with a profiler | Include serializers that fall back to DRF |
-| How does the deployment behave? | Your server, proxy and database | See [deployment behaviour](deployment-validation.md) |
+| Request time by await stack | Pyinstrument | Shows await stacks and the event-loop thread; not a complete profile of worker threads |
+| CPU time and call counts per Python function | Yappi with its CPU clock | Includes worker threads; use call counts and self time, and do not add up overlapping cumulative times |
+| Native CPU work | `perf stat`, Valgrind Cachegrind | Attach to the application process and exclude start-up; simulated instruction counts are not latency |
+| Memory allocation | Memray | Shows allocation volume and stacks; allocated bytes alone do not indicate a leak |
+| Serializer field construction cost | Timing in your application | Measure the first (cold) construction separately from later (warm) copies |
+| Input validation and output time | Your contract tests with a profiler | Include serializers that fall back to DRF |
+| Deployment behaviour | Your server, proxy and database | See [deployment behaviour](deployment-validation.md) |
 
 Install profilers only in the environment you are inspecting, and use a
 dedicated database; they are not dependencies of aiodrf.

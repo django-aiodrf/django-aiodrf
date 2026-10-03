@@ -72,9 +72,9 @@ def package_source(variable, name, versions):
     )
 
 
-FASTDRF = package_source("AIODRF_FASTDRF", "django-fastdrf", ">=0.4,<0.5")
+FASTDRF = package_source("AIODRF_FASTDRF", "django-fastdrf", ">=0.4,<0.6")
 LIFESPAN = package_source("AIODRF_LIFESPAN", "aiodrf-asgi-lifespan", ">=0.1,<0.2")
-ASYNC_CACHE = package_source("AIODRF_ASYNC_CACHE", "aiodrf-async-cache", ">=0.1,<0.2")
+ASYNC_CACHE = package_source("AIODRF_ASYNC_CACHE", "aiodrf-async-cache", ">=0.2,<0.3")
 OPTIONAL_DEPS = [
     "django-tasks>=0.12,<0.13",
     "drf-spectacular",
@@ -208,7 +208,7 @@ def drf_parity(session, django, drf):
         f"djangorestframework~={drf}.0",
         "pytest",
         "pytest-django",
-        # What DRF's own test requirements add; pytz for DRF 3.16 and 3.17.
+        # DRF's own test requirements; pytz for DRF 3.16 and 3.17.
         "dj-database-url",
         "importlib-metadata",
         "pytz",
@@ -602,13 +602,13 @@ def typecheck(session):
     )
     if (
         not output
-        or output.count(": error:") != 5
-        or output.count("[arg-type]") != 5
+        or output.count(": error:") != 6
+        or output.count("[arg-type]") != 6
         or 'Argument "raise_exception"' not in output
         or 'Argument "chunk_size"' not in output
     ):
         session.error(
-            "The consumer fixture must report exactly its five invalid argument types."
+            "The consumer fixture must report exactly its six invalid argument types."
         )
 
 
@@ -685,9 +685,9 @@ def consumer(session):
         silent=True,
         success_codes=[1],
     )
-    if not output or output.count("[arg-type]") != 5 or output.count(": error:") != 5:
+    if not output or output.count("[arg-type]") != 6 or output.count(": error:") != 6:
         session.error(
-            "Installed consumer fixture did not reject exactly its five invalid arguments"
+            "Installed consumer fixture did not reject exactly its six invalid arguments"
         )
     session.install("msgspec", "pydantic")
     session.run(*command, str(project / "tests/typing/optional.py"), env=environment)

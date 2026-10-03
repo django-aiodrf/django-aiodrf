@@ -20,3 +20,15 @@ async def test_page_middleware_and_lifespan_share_native_pool():
         },
         "django_redis.cache.RedisCache",
     )
+
+
+async def test_codec_counter_and_single_flight_through_aiodrf_views():
+    from tests.ecosystem.cache_contracts import check_counter_and_single_flight
+
+    await check_counter_and_single_flight(
+        {
+            "BACKEND": "aiodrf_async_cache.redis.AsyncRedisCache",
+            "LOCATION": URL,
+            "KEY_PREFIX": "redis-counter-" + uuid4().hex,
+        }
+    )

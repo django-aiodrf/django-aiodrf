@@ -31,7 +31,7 @@ class Request(request.Request):
     """
 
     if TYPE_CHECKING:
-        # What DRF's ``__init__`` sets (``parsers or ()``, ...) and the
+        # Attributes DRF's ``__init__`` sets (``parsers or ()``, ...) and the
         # private members it has; its type stubs are looser or silent.
         parsers: Sequence[BaseParser]
         authenticators: Sequence[BaseAuthentication]
