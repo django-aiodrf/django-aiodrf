@@ -6,6 +6,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+FORKS = ("django-fastdrf", "aiodrf-asgi-lifespan", "aiodrf-async-cache")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -61,12 +63,15 @@ def main() -> None:
                 "test",
                 "-e",
                 str(root.parent),
-                "-e",
-                str(root.parent / "forks/django-fastdrf"),
-                "-e",
-                str(root.parent / "forks/aiodrf-asgi-lifespan"),
-                "-e",
-                str(root.parent / "forks/aiodrf-async-cache"),
+                # Checkouts of the packages aiodrf builds on, when they are
+                # changed together with it (see CONTRIBUTING.md); otherwise
+                # their released versions.
+                *(
+                    argument
+                    for checkout in FORKS
+                    if (root.parent / "forks" / checkout).is_dir()
+                    for argument in ("-e", str(root.parent / "forks" / checkout))
+                ),
             ]
         )
         for command in setup:

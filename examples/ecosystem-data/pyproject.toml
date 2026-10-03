@@ -11,7 +11,6 @@ package = false
 restql = ["django-restql>=0.18,<0.19"]
 
 [tool.uv.sources]
-aiodrf-asgi-lifespan = { path = "../../forks/aiodrf-asgi-lifespan", editable = true }
 django-aiodrf = {path = "../..", editable = true}
 
 [dependency-groups]

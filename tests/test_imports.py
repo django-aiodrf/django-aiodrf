@@ -192,7 +192,20 @@ def test_core_asgi_does_not_import_extracted_packages():
         from django.core.exceptions import ImproperlyConfigured
         from aiodrf.asgi import get_asgi_application
         from aiodrf import serializers, views, test, management
-        assert isinstance(get_asgi_application(), ASGIHandler)
+        # Without the lifespan package, aiodrf answers the protocol itself
+        # (Django refuses it) and passes HTTP to Django's handler.
+        import asyncio
+        application = get_asgi_application()
+        assert isinstance(application.application, ASGIHandler)
+        incoming = asyncio.Queue()
+        incoming.put_nowait({"type": "lifespan.startup"})
+        incoming.put_nowait({"type": "lifespan.shutdown"})
+        sent = []
+        async def send(message):
+            sent.append(message["type"])
+        asyncio.run(application({"type": "lifespan"}, incoming.get, send))
+        assert sent == ["lifespan.startup.complete", "lifespan.shutdown.complete"]
+        assert not {"aiodrf_asgi_lifespan", "aiodrf_async_cache"} & set(sys.modules)
         try:
             get_asgi_application(lifespan=lambda: None)
         except ImproperlyConfigured as exc:

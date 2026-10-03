@@ -13,7 +13,6 @@ dependencies = ["aiodrf-asgi-lifespan>=0.1,<0.2",
 package = false
 
 [tool.uv.sources]
-aiodrf-asgi-lifespan = { path = "../../forks/aiodrf-asgi-lifespan", editable = true }
 django-aiodrf = { path = "../..", editable = true }
 
 [dependency-groups]

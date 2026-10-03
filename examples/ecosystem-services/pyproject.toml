@@ -8,8 +8,6 @@ dependencies = ["aiodrf-async-cache[redis,django-valkey]>=0.1,<0.2", "aiodrf-asg
 package = false
 
 [tool.uv.sources]
-aiodrf-async-cache = { path = "../../forks/aiodrf-async-cache", editable = true }
-aiodrf-asgi-lifespan = { path = "../../forks/aiodrf-asgi-lifespan", editable = true }
 django-aiodrf = {path = "../..", editable = true}
 
 [dependency-groups]

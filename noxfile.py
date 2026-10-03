@@ -93,8 +93,13 @@ ECOSYSTEM_SUPPORT_REQUIREMENTS = "requirements/support/requirements.txt"
 PYTEST = ["pytest", "-W", "error"]
 
 
-def install(session, *requirements):
-    session.install(*requirements, *TEST_DEPS, *OPTIONAL_DEPS)
+def install(session, *requirements, without=()):
+    optional = [
+        dependency
+        for dependency in OPTIONAL_DEPS
+        if not dependency.startswith(tuple(without))
+    ]
+    session.install(*requirements, *TEST_DEPS, *optional)
     session.install(FASTDRF, LIFESPAN, ASYNC_CACHE, "--no-deps")
     session.install("-e", ".", "--no-deps")
 
@@ -271,7 +276,11 @@ def example(session):
 
 @nox.session(python="3.14t")
 def tests_freethreaded(session):
-    install(session, "django~=6.1.0", "djangorestframework~=3.18.0")
+    # orjson publishes no free-threaded wheel, and does not build for 3.14t;
+    # its tests skip without it.
+    install(
+        session, "django~=6.1.0", "djangorestframework~=3.18.0", without=("orjson",)
+    )
     # An extension module that does not declare free-threading support turns
     # the GIL back on with a RuntimeWarning, which ``-W error`` makes an
     # error. (``PYTHON_GIL=0`` would keep the GIL off and hide it.)

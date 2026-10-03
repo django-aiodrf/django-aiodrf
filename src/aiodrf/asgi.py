@@ -25,14 +25,25 @@ _THREAD_STATE_KEY = "aiodrf.request_threads"
 
 
 def get_asgi_application(*, lifespan: Any = _UNSET) -> Callable[..., Awaitable[None]]:
-    """Use aiodrf-asgi-lifespan only when a lifespan feature is selected."""
+    """
+    Django's ASGI application, answering the lifespan protocol, which Django
+    refuses. A resource context (``DJANGO_LIFESPAN``) and request thread
+    reuse (``AIODRF["REQUEST_THREADS"]``) need aiodrf-asgi-lifespan; without
+    them its startup and shutdown signals are sent when it is installed.
+    """
     application = django_application()
     idle_threads = aiodrf_settings.REQUEST_THREADS
     factory = (
         getattr(settings, "DJANGO_LIFESPAN", None) if lifespan is _UNSET else lifespan
     )
     if factory is None and idle_threads is None:
-        return application
+        try:
+            from aiodrf_asgi_lifespan import asgi
+        except ModuleNotFoundError as exc:
+            if exc.name != "aiodrf_asgi_lifespan":
+                raise
+            return _LifespanAnswered(application)
+        return asgi.LifespanApplication(application, lifespan=None)
     try:
         from aiodrf_asgi_lifespan import asgi
         from aiodrf_asgi_lifespan import settings as lifespan_settings
@@ -46,6 +57,25 @@ def get_asgi_application(*, lifespan: Any = _UNSET) -> Callable[..., Awaitable[N
     if idle_threads is None:
         return asgi.LifespanApplication(application, lifespan=factory)
     return _ThreadLifespanApplication(_ThreadKeepingHandler(), idle_threads, factory)
+
+
+class _LifespanAnswered:
+    """Answer the lifespan protocol with no resources; pass the rest on."""
+
+    def __init__(self, application: Callable[..., Awaitable[None]]) -> None:
+        self.application = application
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "lifespan":
+            await self.application(scope, receive, send)
+            return
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
 
 
 class _ThreadLifespanApplication:

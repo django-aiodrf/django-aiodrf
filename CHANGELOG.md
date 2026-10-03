@@ -61,8 +61,10 @@ Install the first, and aiodrf's `lifespan` extra for the second. The
 | `aiodrf.test.lifespan` | `aiodrf_asgi_lifespan.testing.lifespan` |
 | `AIODRF["LIFESPAN"]` | `DJANGO_LIFESPAN` |
 
-`aiodrf.asgi.get_asgi_application()` stays, for `AIODRF["REQUEST_THREADS"]`,
-and `AsyncAPIClient(lifespan=...)` takes the state that
+`aiodrf.asgi.get_asgi_application()` stays: it answers the ASGI lifespan
+protocol as before, sends the startup and shutdown signals when
+aiodrf-asgi-lifespan is installed, and adds `AIODRF["REQUEST_THREADS"]`.
+`AsyncAPIClient(lifespan=...)` takes the state that
 `aiodrf_asgi_lifespan.testing.lifespan()` yields.
 
 The other `aiodrf.contrib.builtin` modules of field caching, field copying,
