@@ -24,7 +24,7 @@ application directly with uv.
 | --- | --- | --- |
 | A `ModelViewSet` with token authentication, django-filter, pagination and `Meta.auto_prefetch` | `catalog/views.py`, `catalog/serializers.py` | [migration from DRF](../../docs/guides/migration-from-drf.md) |
 | One request to the stock service per page, not per book (`PrefetchListSerializer.aprefetch`) | `catalog/serializers.py` | [prefetch](../../docs/guides/prefetch.md) |
-| The stock service's HTTP client, opened and closed with the server | `bookshop/lifecycle.py`, `AIODRF["LIFESPAN"]` | [lifespan](../../docs/guides/lifespan.md) |
+| The stock service's HTTP client, opened and closed with the server | `bookshop/lifecycle.py`, `DJANGO_LIFESPAN` | [lifespan](../../docs/guides/lifespan.md) |
 | `304 Not Modified` and `412 Precondition Failed` from `aget_etag` | `BookViewSet.aget_etag` | [extension hooks](../../docs/guides/extension-hooks.md#conditional-requests) |
 | A validated query string (`query_serializer_class`), documented as OpenAPI parameters | `BookSearch` | [implementation section 11](../../docs/guides/implementation.md#11-conditional-requests-query-parameters-and-query) |
 | Newline-delimited JSON export from `QuerySet.aiterator()` | `BookViewSet.export` | [streaming](../../docs/guides/streaming-schema.md) |

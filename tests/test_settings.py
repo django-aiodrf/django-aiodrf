@@ -8,13 +8,13 @@ from django.test import override_settings
 from rest_framework.permissions import DjangoModelPermissions
 
 from aiodrf import checks
-from aiodrf.settings import aiodrf_settings
+from aiodrf.settings import MOVED_TO_FASTDRF, aiodrf_settings
 from aiodrf.utils import is_pure
 
 
 @pytest.mark.aiodrf_settings(REPRESENTATION_MODE="thread")
 def test_invalid_choice_is_rejected_on_every_access():
-    with override_settings(AIODRF={"REPRESENTATION_MODE": "bogus"}):
+    with override_settings(AIODRF={"REPRESENTATION_MODE": "bogus"}, FASTDRF={}):
         for _ in range(3):
             with pytest.raises(ImproperlyConfigured, match="REPRESENTATION_MODE"):
                 getattr(aiodrf_settings, "REPRESENTATION_MODE")  # noqa: B009 -- raises
@@ -23,7 +23,7 @@ def test_invalid_choice_is_rejected_on_every_access():
 
 def test_removed_choice_explains_the_migration():
     with (
-        override_settings(AIODRF={"VALIDATION_UNKNOWN": "optimistic"}),
+        override_settings(AIODRF={"VALIDATION_UNKNOWN": "optimistic"}, FASTDRF={}),
         pytest.raises(ImproperlyConfigured, match='Use "thread", or "inline"'),
     ):
         getattr(aiodrf_settings, "VALIDATION_UNKNOWN")  # noqa: B009 -- raises
@@ -34,10 +34,13 @@ def test_pure_policies_are_imported():
     assert not is_pure(permission, "has_permission")
     # The path a class is imported from need not be the module defining it.
     with override_settings(
-        AIODRF={"PURE_POLICIES": ["aiodrf.permissions.DjangoModelPermissions"]}
+        AIODRF={"PURE_POLICIES": ["aiodrf.permissions.DjangoModelPermissions"]},
+        FASTDRF={},
     ):
         assert is_pure(permission, "has_permission")
-    with override_settings(AIODRF={"PURE_POLICIES": [DjangoModelPermissions]}):
+    with override_settings(
+        AIODRF={"PURE_POLICIES": [DjangoModelPermissions]}, FASTDRF={}
+    ):
         assert is_pure(permission, "has_permission")
     # ``override_settings`` reloads the set.
     assert not is_pure(permission, "has_permission")
@@ -46,7 +49,8 @@ def test_pure_policies_are_imported():
 def test_mistyped_pure_policy_is_an_error():
     with (
         override_settings(
-            AIODRF={"PURE_POLICIES": ["aiodrf.permissions.NoSuchPermission"]}
+            AIODRF={"PURE_POLICIES": ["aiodrf.permissions.NoSuchPermission"]},
+            FASTDRF={},
         ),
         pytest.raises(ImportError, match="PURE_POLICIES"),
     ):
@@ -64,7 +68,8 @@ def test_settings_check():
             "VALIDATION_UNKNOWN": "sometimes",
             "INLINE_RENDERERS": ["rest_framework.renderers.NoSuchRenderer"],
             "FETCH_MODES": "raise",
-        }
+        },
+        FASTDRF={},
     ):
         assert check_ids(checks.check_settings) == [
             "aiodrf.E001",
@@ -116,7 +121,7 @@ def test_a_value_read_before_a_reload_is_not_cached_after_it():
 
 @pytest.mark.parametrize("value", [None, [], 3, "invalid"])
 def test_malformed_settings_mapping_is_reported(value):
-    with override_settings(AIODRF=value):
+    with override_settings(AIODRF=value, FASTDRF={}):
         assert check_ids(checks.check_settings) == ["aiodrf.E003"]
         with pytest.raises(ImproperlyConfigured, match="AIODRF"):
             getattr(aiodrf_settings, "VALIDATION_UNKNOWN")  # noqa: B009 -- raises
@@ -130,27 +135,39 @@ def test_malformed_settings_mapping_is_reported(value):
         ("PURE_POLICIES", [{}], "aiodrf.E006"),
         ("PURE_POLICIES", ["builtins.len"], "aiodrf.E007"),
         ("VALIDATION_UNKNOWN", [], "aiodrf.E001"),
-        ("SERIALIZER_BACKEND", {}, "aiodrf.E001"),
         ("ATOMIC_SAVE", 1, "aiodrf.E006"),
     ],
 )
 def test_malformed_setting_values_are_reported(name, value, error):
-    with override_settings(AIODRF={name: value}):
+    with override_settings(AIODRF={name: value}, FASTDRF={}):
         for _ in range(2):
             assert check_ids(checks.check_settings) == [error]
             with pytest.raises(ImproperlyConfigured, match=name):
                 getattr(aiodrf_settings, name)
 
 
-@pytest.mark.parametrize("mode", ["peers", "raise"])
-def test_fetch_mode_without_django_support_is_reported(mode):
-    with override_settings(AIODRF={"FETCH_MODE": mode}):
-        with mock.patch.object(checks, "DJANGO_HAS_FETCH_MODES", False):
-            assert check_ids(checks.check_settings) == ["aiodrf.W009"]
-        with mock.patch.object(checks, "DJANGO_HAS_FETCH_MODES", True):
-            assert check_ids(checks.check_settings) == []
-    with mock.patch.object(checks, "DJANGO_HAS_FETCH_MODES", False):
-        assert check_ids(checks.check_settings) == []
+@pytest.mark.parametrize("name", sorted(MOVED_TO_FASTDRF))
+def test_django_fastdrfs_settings_left_in_aiodrf_raise(name):
+    # Raised when the settings are first read, not only by the system checks,
+    # which a server does not run: ignored, the setting would stop applying.
+    with (
+        override_settings(AIODRF={name: None}, FASTDRF={}),
+        pytest.raises(
+            ImproperlyConfigured,
+            match=rf"AIODRF\['{name}'\] is now FASTDRF\['{name}'\]",
+        ),
+    ):
+        getattr(aiodrf_settings, "VALIDATION_UNKNOWN")  # noqa: B009 -- raises
+
+
+def test_django_fastdrfs_settings_are_checked():
+    from django.core.checks.registry import registry
+    from fastdrf.checks import check_integrations, check_settings
+
+    assert check_settings in registry.registered_checks
+    assert check_integrations in registry.registered_checks
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "bogus"}, AIODRF={}):
+        assert check_ids(check_settings) == ["fastdrf.E001"]
 
 
 def test_every_setting_has_a_validator():
@@ -160,3 +177,14 @@ def test_every_setting_has_a_validator():
     for name, default in DEFAULTS.items():
         assert VALIDATORS[name](name, default) is None, name
     assert set(CHOICES) <= set(VALIDATORS)
+
+
+def test_lifespan_setting_requires_top_level_django_setting():
+    with override_settings(AIODRF={"LIFESPAN": None}, FASTDRF={}):
+        with pytest.raises(ImproperlyConfigured, match="DJANGO_LIFESPAN"):
+            _ = aiodrf_settings.REQUEST_THREADS
+        errors = checks.check_settings(None)
+        assert any(
+            error.id == "aiodrf.E006" and "DJANGO_LIFESPAN" in error.msg
+            for error in errors
+        )

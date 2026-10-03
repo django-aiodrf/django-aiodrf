@@ -7,7 +7,6 @@ a check concerns project settings rather than a particular application.
 import inspect
 import os
 from collections.abc import Iterator, Mapping, Sequence
-from importlib.util import find_spec
 from typing import Any
 
 from django.apps import AppConfig, apps
@@ -17,12 +16,11 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connections
 from django.utils.module_loading import import_string
 
-from aiodrf.compat import DJANGO_HAS_FETCH_MODES
 from aiodrf.settings import (
     CHOICES,
     DEFAULTS,
     IMPORT_STRINGS,
-    resolve_lifespan,
+    MOVED_TO_FASTDRF,
     setting_error,
 )
 
@@ -42,7 +40,7 @@ def check_settings(
         value = user_settings.get(name, DEFAULTS[name])
         if message := setting_error(name, value):
             invalid.add(name)
-            choice = name in CHOICES or name == "ALLOWED_SERIALIZER_BACKENDS"
+            choice = name in CHOICES
             errors.append(Error(message, id="aiodrf.E001" if choice else "aiodrf.E006"))
     for name in IMPORT_STRINGS:
         if name in invalid:
@@ -64,41 +62,40 @@ def check_settings(
                             id="aiodrf.E007",
                         )
                     )
-    if "LIFESPAN" not in invalid:
-        try:
-            resolve_lifespan(user_settings.get("LIFESPAN"))
-        except ImportError as exc:
-            errors.append(Error(str(exc), id="aiodrf.E002"))
-        except ImproperlyConfigured as exc:
-            errors.append(Error(str(exc), id="aiodrf.E006"))
-    backend = user_settings.get("SERIALIZER_BACKEND", "drf")
-    if backend in ("msgspec", "pydantic") and find_spec(backend) is None:
+    if "LIFESPAN" in user_settings:
         errors.append(
             Error(
-                f"AIODRF['SERIALIZER_BACKEND'] is {backend!r}, which is not installed.",
-                hint=f"pip install django-aiodrf[{backend}]",
-                id="aiodrf.E004",
+                "AIODRF['LIFESPAN'] moved to DJANGO_LIFESPAN; install django-aiodrf[lifespan].",
+                id="aiodrf.E006",
             )
         )
     if (
-        "FETCH_MODE" not in invalid
-        and user_settings.get("FETCH_MODE") is not None
-        and not DJANGO_HAS_FETCH_MODES
+        getattr(settings, "DJANGO_LIFESPAN", None) is not None
+        or user_settings.get("REQUEST_THREADS") is not None
     ):
-        errors.append(
-            Warning(
-                "AIODRF['FETCH_MODE'] needs Django 6.1 and is ignored.",
-                hint="Upgrade Django, or remove the setting.",
-                id="aiodrf.W009",
+        try:
+            from aiodrf_asgi_lifespan.settings import get_lifespan_factory
+
+            get_lifespan_factory()
+        except ImportError as exc:
+            errors.append(
+                Error(
+                    f"DJANGO_LIFESPAN requires django-aiodrf[lifespan]: {exc}",
+                    id="aiodrf.E002",
+                )
             )
-        )
+        except ImproperlyConfigured as exc:
+            errors.append(Error(str(exc), id="aiodrf.E006"))
     errors.extend(
         Warning(
             f"AIODRF[{name!r}] is not a setting of aiodrf and is ignored.",
             hint=f"The settings are {', '.join(sorted(DEFAULTS))}.",
             id="aiodrf.W003",
         )
-        for name in sorted(set(user_settings) - set(DEFAULTS), key=str)
+        for name in sorted(
+            set(user_settings) - set(DEFAULTS) - MOVED_TO_FASTDRF - {"LIFESPAN"},
+            key=str,
+        )
     )
     return errors
 
@@ -217,36 +214,14 @@ def _url_views(
 ) -> Iterator[tuple[type[Any], dict[str, Any]]]:
     """
     Each view class the URLconf routes to that subclasses ``base`` (aiodrf's
-    ``APIView`` by default), with its ``initkwargs``.
+    ``APIView`` by default), with its ``initkwargs``: django-fastdrf's walk.
     """
-    from django.urls import URLPattern, URLResolver, get_resolver
+    from fastdrf.checks import _url_views as url_views
 
-    if not getattr(settings, "ROOT_URLCONF", None):
-        # As Django's own URL checks: nothing to look at.
-        return
     if base is None:
         from aiodrf.views import APIView as base
 
-    # Each pattern with the URLconfs that include it: a URLconf including
-    # itself is not entered again on that path, while one included under
-    # two routes is walked under each.
-    root = get_resolver()
-    pending: list[tuple[URLPattern | URLResolver, tuple[int, ...]]] = [
-        (pattern, (id(root.urlconf_module),)) for pattern in root.url_patterns
-    ]
-    while pending:
-        pattern, ancestors = pending.pop()
-        if isinstance(pattern, URLResolver):
-            key = id(pattern.urlconf_module)
-            if key not in ancestors:
-                path = (*ancestors, key)
-                pending.extend((child, path) for child in pattern.url_patterns)
-            continue
-        if not isinstance(pattern, URLPattern):
-            continue
-        view_class = getattr(pattern.callback, "cls", None)
-        if isinstance(view_class, type) and issubclass(view_class, base):
-            yield view_class, getattr(pattern.callback, "initkwargs", {})
+    return url_views(base)
 
 
 @register(Tags.urls)
@@ -255,18 +230,13 @@ def check_serializer_backends(
 ) -> list[CheckMessage]:
     # ``as_view`` refuses the first view it meets; this lists every one, and
     # also views built before the setting changed.
-    errors: list[CheckMessage] = []
-    seen = set()
-    for view_class, initkwargs in _url_views():
-        key = (view_class, repr(sorted(initkwargs.items(), key=lambda item: item[0])))
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            view_class._compile_serializers(initkwargs)
-        except ImproperlyConfigured as exc:
-            errors.append(Error(str(exc), obj=view_class, id="aiodrf.E005"))
-    return errors
+    from fastdrf.checks import _view_errors
+
+    return _view_errors(
+        _url_views(),
+        lambda view_class, initkwargs: view_class._compile_serializers(initkwargs),
+        check_id="aiodrf.E005",
+    )
 
 
 @register(Tags.urls)

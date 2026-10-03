@@ -39,7 +39,7 @@ reopen. Create another instance for another lifespan.
 ## Opt-in retries for repeatable operations
 
 Use an async `Retry` object, not the similarly named synchronous class.
-For `aiodrf.contrib.redis.AsyncRedisCache`, the following defines a separate
+For `aiodrf_async_cache.redis.AsyncRedisCache`, the following defines a separate
 alias for callers whose operations tolerate replay. Start from the `native`
 alias in the cache guide:
 
@@ -61,7 +61,7 @@ CACHES["native_reads"] = {
 }
 ```
 
-For `aiodrf.contrib.valkey.AsyncValkeyCache`, use the identical lowercase options
+For `aiodrf_async_cache.valkey.AsyncValkeyCache`, use the identical lowercase options
 with `Retry` from `valkey.asyncio.retry`, `FullJitterBackoff` from `valkey.backoff`
 and the exceptions from `valkey.exceptions`. Never mix Redis and Valkey objects.
 The alias name is descriptive, not an access-control policy. Restrict its

@@ -24,6 +24,22 @@ combination. The library and its examples do not commit `uv.lock`: install with
 `uv pip` and run commands with `uv run --no-sync`, so that the declared version
 ranges are what gets tested.
 
+aiodrf builds on three separate distributions:
+[django-fastdrf](https://github.com/ctolon/django-fastdrf),
+[aiodrf-asgi-lifespan](https://github.com/django-aiodrf/aiodrf-asgi-lifespan)
+and [aiodrf-async-cache](https://github.com/django-aiodrf/aiodrf-async-cache).
+To change one of them together with aiodrf, clone it into `forks/` (ignored
+by git) and install it in editable mode:
+
+```console
+uv pip install -e forks/django-fastdrf -e forks/aiodrf-asgi-lifespan -e forks/aiodrf-async-cache
+```
+
+nox uses these checkouts when they are present, and the declared version
+ranges otherwise. `AIODRF_FASTDRF`, `AIODRF_LIFESPAN` and `AIODRF_ASYNC_CACHE`
+select another checkout or a wheel. Each of these packages has its own tests,
+which run without aiodrf.
+
 | Tool | Purpose | Command |
 | --- | --- | --- |
 | uv | Environments and dependency installation | `uv pip install -e . --group dev` |
@@ -109,8 +125,8 @@ uv run --no-sync nox -s examples
 Several sessions need the local services defined in
 `tests/services/compose.yaml`. Point them only at dedicated test services:
 their fixtures migrate and clean the databases they use. The Redis and Valkey
-Sentinel and Cluster tests use their own services; see
-`tests/services/cache-topologies.md`.
+Sentinel and Cluster tests belong to aiodrf-async-cache, with its own
+services.
 
 The suite also runs with the benchmark's tuned settings
 (`AIODRF_TEST_PROFILE=tuned`, `tuned-drf-fallback` or `tuned-python`, see

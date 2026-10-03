@@ -6,12 +6,13 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 
 import sentry_sdk
+from aiodrf_async_cache.lifespan import cache_lifespan
+from aiodrf_async_cache.middleware import AsyncCache
 from django.conf import settings
 from elasticsearch import AsyncElasticsearch
 from opensearchpy import AsyncOpenSearch
 from sentry_sdk.integrations.django import DjangoIntegration
 
-from aiodrf.contrib.async_cache import AsyncCache, cache_lifespan
 from aiodrf.utils import run_sync
 
 

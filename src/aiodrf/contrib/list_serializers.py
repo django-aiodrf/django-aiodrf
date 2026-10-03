@@ -26,33 +26,13 @@ reads ``parent``; so does ``child.parent is serializer``, which is False for
 the proxy. Compare with ``==``.
 """
 
-import weakref
-from typing import Any
+# django-fastdrf's, which maintains them.
+from fastdrf.list_serializers import WeakChildMixin
 
 from aiodrf import serializers
 from aiodrf.contrib.typed import SchemaListSerializer as _SchemaListSerializer
 
-__all__ = [
-    "ListSerializer",
-    "SchemaListSerializer",
-    "WeakChildMixin",
-    "bind_child_weakly",
-]
-
-
-def bind_child_weakly(list_serializer: Any) -> None:
-    """Make the child of ``list_serializer`` refer to it through a weak proxy."""
-    child = list_serializer.child
-    if child is not None and child.parent is list_serializer:
-        child.parent = weakref.proxy(list_serializer)
-
-
-class WeakChildMixin:
-    """For a ``ListSerializer`` subclass: bind the child weakly once it is bound."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        bind_child_weakly(self)
+__all__ = ["ListSerializer", "SchemaListSerializer"]
 
 
 class ListSerializer(WeakChildMixin, serializers.ListSerializer):

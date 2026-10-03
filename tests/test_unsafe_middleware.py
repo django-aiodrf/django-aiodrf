@@ -47,6 +47,7 @@ def stack(request):
         )
     with override_settings(
         AIODRF={"UNSAFE_SYNC_MIDDLEWARE": request.param},
+        FASTDRF={},
         MIDDLEWARE=PATHS,
         ROOT_URLCONF=(),
         SESSION_ENGINE="django.contrib.sessions.backends.signed_cookies",
@@ -57,10 +58,10 @@ def stack(request):
 @pytest.mark.parametrize("cls", CLASSES)
 def test_capability_is_opt_in_and_hook_implementations_are_unchanged(cls):
     django_class = cls.__bases__[1]
-    with override_settings(AIODRF={}):
+    with override_settings(AIODRF={}, FASTDRF={}):
         assert aiodrf_settings.UNSAFE_SYNC_MIDDLEWARE is False
         assert cls.async_capable is True
-    with override_settings(AIODRF={"UNSAFE_SYNC_MIDDLEWARE": True}):
+    with override_settings(AIODRF={"UNSAFE_SYNC_MIDDLEWARE": True}, FASTDRF={}):
         if ASGIREF_VERSION < (3, 12, 1):
             with pytest.raises(ImproperlyConfigured, match=r"asgiref>=3\.12\.1"):
                 getattr(cls, "async_capable")  # noqa: B009 -- exercise the descriptor
@@ -85,6 +86,7 @@ def test_capability_is_opt_in_and_hook_implementations_are_unchanged(cls):
 def test_invalid_opt_in_is_reported_without_crashing_deployment_checks(value):
     with override_settings(
         AIODRF={"UNSAFE_SYNC_MIDDLEWARE": value},
+        FASTDRF={},
         MIDDLEWARE=PATHS,
         ASGI_APPLICATION="project.asgi.application",
     ):
@@ -98,6 +100,7 @@ def test_unsupported_adapters_are_rejected_before_constructing_the_handler(monke
     monkeypatch.setattr("aiodrf.settings.ASGIREF_VERSION", (3, 8, 1))
     with override_settings(
         AIODRF={"UNSAFE_SYNC_MIDDLEWARE": True},
+        FASTDRF={},
         MIDDLEWARE=PATHS,
         ASGI_APPLICATION="project.asgi.application",
     ):
@@ -355,6 +358,7 @@ async def test_grouping_reduces_crossings_without_changing_the_response(monkeypa
     for enabled in (False, True):
         with override_settings(
             AIODRF={"UNSAFE_SYNC_MIDDLEWARE": enabled},
+            FASTDRF={},
             MIDDLEWARE=PATHS,
             ROOT_URLCONF=(path("", Public.as_view()),),
         ):

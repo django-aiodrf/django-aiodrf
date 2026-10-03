@@ -50,8 +50,8 @@ experimental, such as `ConcurrentListSerializer`.
 | Tier | Scope | Compatibility policy |
 | --- | --- | --- |
 | Application API | The modules named after DRF's (`views`, `generics`, `mixins`, `viewsets`, `serializers`, `routers`, `decorators`, `permissions`, `authentication`, `throttling`, `pagination`, `request`, `response`, `test`), `aiodrf.aio`, `aiodrf.asgi`, `aiodrf.cache`, `aiodrf.management` (`AsyncCommand`, `acall_command`), the `AIODRF` settings, the documented classes of the contrib modules, `python -m aiodrf.codemod` and the management commands | Versioned as described above |
-| Extension API | `aiodrf.utils`: `async_safe`, `register_pure`, `register_pure_method`, `run_sync`, `count_hops`; `aiodrf.authentication.register_credentials_check`; the readers and writers of `aiodrf.contrib.convert` | Versioned as described above; for code that tells aiodrf about a project's classes |
-| Internal | Everything else: names not in a module's `__all__` (for example `resolve_pair`, `definer`, `class_cache` and `bridge_base` in `aiodrf.utils`), names starting with an underscore, the private modules of `aiodrf.aio`, the internals of `aiodrf.contrib.compiler` and `aiodrf.contrib.inputs`, and `Schema`, `Spec` and `T` in `aiodrf.contrib.convert` | None: these may change in any release |
+| Extension API | `aiodrf.utils`: `async_safe`, `register_pure`, `register_pure_method`, `run_sync`, `count_hops`; `aiodrf.authentication.register_credentials_check` | Versioned as described above; for code that tells aiodrf about a project's classes |
+| Internal | Everything else: names not in a module's `__all__` (for example `resolve_pair`, `definer`, `class_cache` and `bridge_base` in `aiodrf.utils`), names starting with an underscore, the private modules of `aiodrf.aio` and of the modules django-fastdrf maintains (its compiler, input recognition and converter), which follow django-fastdrf's own policy | None: these may change in any release |
 
 Each module's `__all__` lists its application or extension API.
 

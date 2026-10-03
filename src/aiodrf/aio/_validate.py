@@ -6,6 +6,8 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError as DjangoValidationError
+from fastdrf._relations import _batch_related_lookups, _unbatch
+from fastdrf.settings import fastdrf_settings
 from rest_framework import fields, relations, serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import SkipField, get_error_detail
@@ -28,7 +30,6 @@ from aiodrf.aio._classify import (
 )
 from aiodrf.aio._common import NEEDS_AWAIT, _acall, _bridged, _sync_member
 from aiodrf.compat import DRF_HAS_LIST_ERRORS_AS_DICT
-from aiodrf.contrib.builtin.relations import _batch_related_lookups, _unbatch
 from aiodrf.settings import aiodrf_settings
 from aiodrf.utils import (
     Impl,
@@ -141,7 +142,7 @@ def _sync_is_valid(serializer: Any, raise_exception: bool) -> bool:
     backend = _input_backend(serializer)
     # The python backend compiles output only: DRF validates.
     if not hasattr(serializer, "_validated_data") and backend not in ("drf", "python"):
-        from aiodrf.contrib.inputs import NOT_RECOGNIZED, recognize
+        from fastdrf.inputs import NOT_RECOGNIZED, recognize
 
         value = recognize(serializer, backend=backend)
         if value is not NOT_RECOGNIZED:
@@ -167,7 +168,7 @@ def _input_backend(serializer: Any) -> str:
         else serializer
     )
     backend = getattr(getattr(target, "Meta", None), "serializer_backend", None)
-    return backend or aiodrf_settings.SERIALIZER_BACKEND
+    return backend or fastdrf_settings.SERIALIZER_BACKEND
 
 
 def _finish_is_valid(serializer: Any, raise_exception: bool) -> bool:

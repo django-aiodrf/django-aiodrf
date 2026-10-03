@@ -27,7 +27,6 @@ from django.core.exceptions import ImproperlyConfigured, SynchronousOnlyOperatio
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
-from aiodrf.settings import aiodrf_settings
 from aiodrf.utils import Impl, bridge_base, resolve_pair, run_sync
 
 __all__ = ["AsyncCommand", "acall_command"]
@@ -118,7 +117,7 @@ class AsyncCommand(BaseCommand):
     as ``handle()``'s is. SIGINT cancels it and raises ``KeyboardInterrupt``;
     SIGTERM cancels it and exits with status 143.
 
-    With ``lifespan = True``, ``AIODRF['LIFESPAN']`` is entered around the
+    With ``lifespan = True``, ``DJANGO_LIFESPAN`` is entered around the
     handler, on its loop, and its value is ``self.get_lifespan_state(Type)``.
     The ``asgi_startup`` and ``asgi_shutdown`` signals are not sent: their
     receivers expect an ASGI scope.
@@ -175,8 +174,8 @@ class AsyncCommand(BaseCommand):
         value = self._lifespan_state
         if value is _UNSET:
             raise ImproperlyConfigured(
-                "No active aiodrf lifespan state. Set lifespan = True on the command "
-                "and configure AIODRF['LIFESPAN']."
+                "No active lifespan state. Set lifespan = True on the command "
+                "and configure DJANGO_LIFESPAN."
             )
         if not isinstance(value, expected_type):
             raise ImproperlyConfigured(
@@ -205,10 +204,18 @@ class AsyncCommand(BaseCommand):
             return await handler(*args, **options)
 
     async def _enter_lifespan(self, stack: AsyncExitStack) -> None:
-        factory = aiodrf_settings.LIFESPAN
+        try:
+            from aiodrf_asgi_lifespan.settings import get_lifespan_factory
+        except ModuleNotFoundError as exc:
+            if exc.name != "aiodrf_asgi_lifespan":
+                raise
+            raise ImproperlyConfigured(
+                "Install django-aiodrf[lifespan] for command lifespans."
+            ) from exc
+        factory = get_lifespan_factory()
         if factory is None:
             raise ImproperlyConfigured(
-                f"{type(self).__qualname__}.lifespan is True, but AIODRF['LIFESPAN'] is not set."
+                f"{type(self).__qualname__}.lifespan is True, but DJANGO_LIFESPAN is not set."
             )
         context = factory()
         if not isinstance(context, AbstractAsyncContextManager):

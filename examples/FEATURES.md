@@ -19,7 +19,7 @@ settings. Each example's README describes what it runs and its limits; the
 | OpenAPI, Swagger, query parameters and stream item annotations | [typed-schemas](typed-schemas/README.md), [streaming](streaming/README.md), [bookshop](bookshop/README.md) | Schema generation must work offline, without lifespan I/O. QUERY cannot be emitted as an OpenAPI 3.0/3.1 operation; the guide supplies the exclusion hook. |
 | django-filter, ordering/search and three paginator types | [crud](crud/README.md) | Query construction and customized filters run in the worker. Counts and prefetches remain real queries. |
 | ORM prefetch inference and explicit prefetches | [bookshop](bookshop/README.md), [serializer-backends](serializer-backends/README.md) | `Meta.auto_prefetch` assists static sources; method fields still need explicit queryset design. It cannot infer arbitrary application code. |
-| FETCH_MODE peers/raise | [crud](crud/README.md) | Django 6.1-only opt-in; `raise` diagnoses lazy reads, `peers` may load additional rows. Leave unset on older Django. |
+| FETCH_MODE peers/raise | [crud](crud/README.md) | Django 6.1-only opt-in; `raise` diagnoses lazy reads, `peers` may load additional rows. A system-check error (`fastdrf.E006`) on older Django: leave it unset. |
 | Batched list enrichment | [list-enrichment](list-enrichment/README.md), [bookshop](bookshop/README.md) | One async batch before representation is preferable to N independent service calls when the service supports batching. |
 | Bounded concurrent item representation | [list-enrichment](list-enrichment/README.md) | Experimental; independent fresh serializers, stable order, bounded tasks. Not a parallel-ORM transaction API. Cancellation contracts have separate regression tests. |
 | Session/Basic/Token auth, challenges, permissions and CSRF | [policies](policies/README.md) | Vendor semantics and Django middleware retained. Anonymous access, 401/403 and authenticated writes must be tested independently. |
@@ -55,7 +55,19 @@ silently enables an experimental option. The authoritative defaults remain in
 | `ATOMIC_SAVE` | True for owned default sync save units | CRUD; native-postgres uses its native transaction adapter; MongoDB uses its backend adapter |
 | `INLINE_RENDERERS` | Empty; custom renderers must be CPU-only to opt in | typed-schemas uses the supported msgspec codec, not a wildcard purity declaration |
 | `PURE_POLICIES` | Empty; a declaration never validates the policy's implementation | Deliberately not used for authentication SDKs in vendor-authentication |
-| `FETCH_MODE` | None; peers/raise require Django 6.1 | crud environment option |
+| `ADRF_COMPAT` | False; aliases only with explicit migration opt-in | migration environments only |
+| `MONKEYPATCHES` | Empty; named, process-wide patches of DRF classes | not used by the examples |
+| `REQUEST_THREADS` | None; Django's two thread starts per request | not used by the examples; see the [tuned profile](../docs/guides/tuned-profile.md#request-threads) |
+
+### django-fastdrf settings (`FASTDRF`)
+
+The serializer optimizations are django-fastdrf's, a dependency of aiodrf; their
+defaults live in `fastdrf.settings` and the
+[settings reference](../docs/reference/settings.md#django-fastdrf-settings-fastdrf).
+
+| Setting | Default/evaluation | Example or explicit exclusion |
+| --- | --- | --- |
+| `FETCH_MODE` | None; peers/raise require Django 6.1, a system-check error (`fastdrf.E006`) before | crud environment option |
 | `SERIALIZER_BACKEND` | drf | serializer-backends, global and per-class endpoints |
 | `SERIALIZER_BACKEND_PARITY` | strict | strict-msgspec, strict-pydantic and explicit tuned/fast profile |
 | `SERIALIZER_BACKEND_FALLBACK` | drf; error is useful to enforce expected eligibility in tests | serializer inspection; do not promise acceleration after fallback |
@@ -63,9 +75,6 @@ silently enables an experimental option. The authoritative defaults remain in
 | `CACHE_SERIALIZER_FIELDS` | False; only static classes, independent field copies | tuned profile |
 | `FIELD_COPY_MODE` | deepcopy; clone/compiled require field caching | tuned-clone and tuned-compiled profiles; serializer/view selection; recursive constructors and custom-copy fallback |
 | `BATCH_RELATED_LOOKUPS` | False; narrow PK relation-input batching | tuned profile, preserving invalid-key errors and write semantics |
-| `ADRF_COMPAT` | False; aliases only with explicit migration opt-in | migration environments only |
-| `MONKEYPATCHES` | Empty; named, process-wide patches of DRF classes | not used by the examples |
-| `REQUEST_THREADS` | None; Django's two thread starts per request | not used by the examples; see the [tuned profile](../docs/guides/tuned-profile.md#request-threads) |
 
 ## Beyond the examples
 

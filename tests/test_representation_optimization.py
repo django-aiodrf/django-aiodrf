@@ -23,7 +23,10 @@ async def test_async_method_field_identity_lookup_does_not_hop_per_row(rows, mod
             return instance["value"]
 
     data = [{"value": n} for n in range(rows)]
-    with override_settings(AIODRF={"REPRESENTATION_MODE": mode}), count_hops() as hops:
+    with (
+        override_settings(AIODRF={"REPRESENTATION_MODE": mode}, FASTDRF={}),
+        count_hops() as hops,
+    ):
         result = await aio.data(Item(data, many=True))
     assert result == data
     assert all(actual is expected for actual, expected in zip(seen, data, strict=True))

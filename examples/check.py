@@ -61,6 +61,12 @@ def main() -> None:
                 "test",
                 "-e",
                 str(root.parent),
+                "-e",
+                str(root.parent / "forks/django-fastdrf"),
+                "-e",
+                str(root.parent / "forks/aiodrf-asgi-lifespan"),
+                "-e",
+                str(root.parent / "forks/aiodrf-async-cache"),
             ]
         )
         for command in setup:

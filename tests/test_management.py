@@ -394,7 +394,7 @@ class WithoutLifespan(AsyncCommand):
 @pytest.fixture
 def configured():
     RESOURCES.clear()
-    with override_settings(AIODRF={"LIFESPAN": lifespan}):
+    with override_settings(AIODRF={}, DJANGO_LIFESPAN=lifespan, FASTDRF={}):
         yield RESOURCES
     RESOURCES.clear()
 
@@ -434,7 +434,7 @@ def test_the_handlers_exception_reaches_the_lifespan(configured):
 
 def test_a_failing_lifespan_propagates():
     with (
-        override_settings(AIODRF={"LIFESPAN": failing_lifespan}),
+        override_settings(AIODRF={}, DJANGO_LIFESPAN=failing_lifespan, FASTDRF={}),
         pytest.raises(ConnectionError, match="unreachable"),
     ):
         run(WithLifespan())

@@ -1,7 +1,7 @@
 """
 The input recognizer against DRF, with generated input.
 
-``aiodrf.contrib.inputs`` may only accept what DRF accepts, and must then
+``fastdrf.inputs`` may only accept what DRF accepts, and must then
 produce DRF's ``validated_data`` exactly. The strategies below mix canonical
 values with everything a JSON body can contain, and the pinned examples are
 the differences between msgspec and DRF found while the recognizer was
@@ -19,12 +19,12 @@ from django.core.validators import (
 )
 from django.http import QueryDict
 from django.test import override_settings
+from fastdrf import inputs
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import inputs
 from tests.testapp.models import Author
 
 PROFILE = settings(derandomize=True, database=None, deadline=None, max_examples=200)
@@ -230,7 +230,7 @@ async def test_the_backend_is_transparent(order):
     # Through the public API the result is DRF's whatever the recognizer did.
     reference = OrderSerializer(data=order)
     valid = reference.is_valid()
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}):
         serializer = OrderSerializer(data=order)
         assert await aio.is_valid(serializer) is valid
     assert exact(serializer.validated_data) == exact(reference.validated_data)
@@ -248,7 +248,7 @@ class Scalar(drf_serializers.BaseSerializer):
 @pytest.mark.parametrize("backend", ["msgspec", "pydantic"])
 async def test_a_serializer_without_fields_is_validated_by_drf(backend):
     assert inputs.recognize(Scalar(data="3"), backend=backend) is inputs.NOT_RECOGNIZED
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         serializer = Scalar(data="3")
         assert await aio.is_valid(serializer)
     assert serializer.validated_data == 3
@@ -373,7 +373,7 @@ async def test_relation_fallback_keeps_drf_errors_without_a_compiler_cache_key(
         raise AssertionError("Relations do not need an input compiler cache key.")
 
     monkeypatch.setattr(inputs, "_signature", unexpected_signature)
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         serializer = Payload(data=data)
         assert not await aio.is_valid(serializer)
     assert serializer.errors == reference.errors
@@ -426,7 +426,7 @@ async def test_selected_backends_recognize_input():
     try:
         for backend, expected in (("drf", 0), ("pydantic", 1), ("msgspec", 1)):
             calls.clear()
-            with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+            with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
                 assert await aio.is_valid(
                     AuthorModelSerializer(data={"name": "Ursula"})
                 )
@@ -596,7 +596,7 @@ async def test_pydantic_input_respects_per_serializer_opt_out():
             serializer_backend = "drf"
 
     with (
-        override_settings(AIODRF={"SERIALIZER_BACKEND": "pydantic"}),
+        override_settings(FASTDRF={"SERIALIZER_BACKEND": "pydantic"}, AIODRF={}),
         patch.object(inputs, "recognize") as recognize,
     ):
         serializer = Example(data={"value": "12"})
@@ -622,7 +622,7 @@ def test_pydantic_nested_model_instances_cannot_bypass_drf_input_rules():
 def test_recursive_unused_input_declines_without_changing_drf_validation(backend):
     data = {"sku": "ab", "quantity": 1}
     data["unused"] = data
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         serializer = LineSerializer(data=data)
         assert aio.try_is_valid(serializer) is True
         assert serializer.validated_data == {"sku": "ab", "quantity": 1}
@@ -660,7 +660,7 @@ def test_a_method_assigned_to_a_field_keeps_drfs_validation(backend):
         serializer = Nested(data={"item": {"value": 1}})
         return _rejecting(serializer, serializer.fields["item"].fields["value"])
 
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         # Recognized, then an instance with its own hook, then recognized again.
         assert aio.try_is_valid(plain()) is True
         for make in (rejecting, nested_rejecting):
@@ -679,7 +679,7 @@ def test_a_method_assigned_to_a_list_keeps_drfs_validation(backend, hook):
 
     serializer = Value(data=[{"value": 1}], many=True)
     setattr(serializer, hook, reject)
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_is_valid(Value(data=[{"value": 1}], many=True)) is True
         assert inputs.recognize(serializer, backend=backend) is inputs.NOT_RECOGNIZED
         assert aio.try_is_valid(serializer) is False
@@ -702,7 +702,7 @@ def test_the_fold_of_a_time_object_is_kept(backend):
 
 
 def test_a_full_variant_cache_builds_nothing_more(monkeypatch):
-    from aiodrf.contrib.compiler import MAX_VARIANTS
+    from fastdrf.compiler import MAX_VARIANTS
 
     class Fields(drf_serializers.Serializer):
         a = drf_serializers.IntegerField()

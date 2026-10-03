@@ -5,4 +5,4 @@ aiodrf mirrors the layout of ``rest_framework``: import ``APIView`` from
 ``aiodrf.views``, ``ModelViewSet`` from ``aiodrf.viewsets``, and so on.
 """
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"

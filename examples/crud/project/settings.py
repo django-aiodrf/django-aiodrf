@@ -42,4 +42,5 @@ REST_FRAMEWORK = {
 }
 MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
 AIODRF = {}
-AIODRF["FETCH_MODE"] = os.environ.get("EXAMPLE_FETCH_MODE") or None
+# django-fastdrf, which aiodrf builds on, applies the fetch mode.
+FASTDRF = {"FETCH_MODE": os.environ.get("EXAMPLE_FETCH_MODE") or None}

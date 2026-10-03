@@ -2,7 +2,7 @@
 
 import os
 
-from aiodrf.asgi import get_asgi_application
+from aiodrf_asgi_lifespan.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
 django_application = get_asgi_application()

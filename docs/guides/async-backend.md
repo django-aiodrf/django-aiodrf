@@ -212,7 +212,10 @@ can introduce another adapter. Evaluate connection budgets, database latency
 and complete request behavior before selecting the integration.
 
 Measured on one process against a local PostgreSQL with pooled connections
-(CPU per request, 16 concurrent requests, ten-row list / one row / create):
+(CPU per request, 16 concurrent requests, ten-row list / one row / create),
+on the machine described in
+[performance](performance.md#environment-of-the-published-measurements);
+other hardware gives other times:
 
 | | Ordinary ORM | Native |
 | --- | ---: | ---: |

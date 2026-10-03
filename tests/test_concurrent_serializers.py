@@ -586,3 +586,31 @@ async def test_sync_factory_returning_coroutine_fails_without_leaking_it():
     with pytest.raises(TypeError, match="unbound serializer"):
         await Items([1], child=serializers.Serializer()).adata()
     gc.collect()
+
+
+class Named(serializers.ModelSerializer):
+    class Meta:
+        model = Author
+        fields = ["id", "name"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("backend", ["drf", "msgspec", "python"])
+async def test_a_compiled_child_still_goes_through_the_lists_items(backend):
+    seen = []
+
+    class Recorded(serializers.ModelSerializer):
+        class Meta:
+            model = Author
+            fields = ["id", "name"]
+
+    class Items(ConcurrentListSerializer):
+        def get_item_serializer(self, instance):
+            seen.append(instance.pk)
+            return Named(instance, context=dict(self.context))
+
+    authors = [Author(pk=1, name="Ada"), Author(pk=2, name="Bo")]
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
+        data = await Items(authors, child=Recorded()).adata()
+    assert data == [{"id": 1, "name": "Ada"}, {"id": 2, "name": "Bo"}]
+    assert sorted(seen) == [1, 2]

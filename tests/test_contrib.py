@@ -11,16 +11,14 @@ import pydantic
 import pytest
 from django.test import TestCase, override_settings
 from django.urls import path
+from fastdrf import compiler
+from fastdrf.msgspec.parsers import MsgspecJSONParser
+from fastdrf.msgspec.renderers import MsgspecJSONRenderer
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import ValidationError
 
 from aiodrf import aio, generics, viewsets
-from aiodrf.contrib import compiler
-from aiodrf.contrib.msgspec import (
-    MsgspecJSONParser,
-    MsgspecJSONRenderer,
-    MsgspecSerializer,
-)
+from aiodrf.contrib.msgspec import MsgspecSerializer
 from aiodrf.contrib.pydantic import PydanticSerializer
 from aiodrf.routers import SimpleRouter
 from aiodrf.test import AsyncAPIClient
@@ -185,7 +183,7 @@ def test_pydantic_errors_are_collected():
 
 @override_settings(REST_FRAMEWORK={"LIST_SERIALIZER_ERRORS_AS_DICT": False})
 def test_list_errors_follow_drf_setting():
-    from aiodrf.contrib.typed import error_detail
+    from fastdrf.typed import error_detail
 
     detail = error_detail([(("tags", 1, "name"), "Required.", "required")])
     assert detail == {"tags": [{}, {"name": ["Required."]}]}
@@ -290,16 +288,10 @@ def test_an_unsupported_value_fails_as_in_drf():
     ],
     ids=repr,
 )
-@pytest.mark.parametrize("kept", [False, True], ids=["render", "kept"])
-def test_the_renderer_outputs_drfs_bytes_where_msgspec_cannot(data, kept):
+def test_the_renderer_outputs_drfs_bytes_where_msgspec_cannot(data):
     from rest_framework.renderers import JSONRenderer
 
-    from aiodrf.response import _KEPT_ENCODER_RENDERERS
-
-    renderer = (
-        _KEPT_ENCODER_RENDERERS[MsgspecJSONRenderer] if kept else MsgspecJSONRenderer()
-    )
-    assert renderer.render(data) == JSONRenderer().render(data)
+    assert MsgspecJSONRenderer().render(data) == JSONRenderer().render(data)
 
 
 @pytest.mark.parametrize(
@@ -429,7 +421,7 @@ class CompilerTests(TestCase):
             assert "output as a Decimal" in compiler.report(EditionWithDecimal())
         assert compiler.report(EditionWithDecimal(), parity="fast") is None
 
-    @override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"})
+    @override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={})
     async def test_backend_setting_in_views(self):
         view = generics.ListAPIView.as_view(
             queryset=Edition.objects.select_related("book"),
@@ -468,8 +460,7 @@ def test_nested_components_that_share_a_name_are_reported():
 
     from drf_spectacular.drainage import GENERATOR_STATS
     from drf_spectacular.plumbing import ComponentRegistry
-
-    from aiodrf.contrib.spectacular.extensions import SchemaSerializerExtension
+    from fastdrf.spectacular import SchemaSerializerExtension
 
     def order_serializer(part_fields):
         part = msgspec.defstruct("Part", part_fields)
@@ -614,10 +605,9 @@ class DirectionTests(TestCase):
 def test_the_msgspec_parser_answers_bad_bodies_as_drf(encoding, body):
     import io
 
+    from fastdrf.msgspec.parsers import MsgspecJSONParser
     from rest_framework.exceptions import ParseError
     from rest_framework.parsers import JSONParser
-
-    from aiodrf.contrib.msgspec.parsers import MsgspecJSONParser
 
     for parser in (JSONParser(), MsgspecJSONParser()):
         with pytest.raises(ParseError, match="JSON parse error"):
@@ -625,7 +615,8 @@ def test_the_msgspec_parser_answers_bad_bodies_as_drf(encoding, body):
 
 
 async def test_a_body_its_charset_cannot_decode_is_a_400():
-    from aiodrf.contrib.msgspec.parsers import MsgspecJSONParser
+    from fastdrf.msgspec.parsers import MsgspecJSONParser
+
     from aiodrf.response import Response
     from aiodrf.test import AsyncAPIRequestFactory
     from aiodrf.views import APIView
@@ -650,9 +641,8 @@ def test_an_unknown_charset_is_handled_as_by_drf():
     import io
 
     from django.http import HttpRequest
+    from fastdrf.msgspec.parsers import MsgspecJSONParser
     from rest_framework.parsers import JSONParser
-
-    from aiodrf.contrib.msgspec.parsers import MsgspecJSONParser
 
     # Django ignores a charset it does not know: the parser gets the default.
     request = HttpRequest()

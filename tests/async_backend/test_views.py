@@ -365,7 +365,7 @@ async def test_a_created_row_is_represented_in_the_worker_in_inline_mode():
     # Inline mode vouches for the project's querysets; the to-many relations
     # of a row the view just saved are not loaded.
     lib, _ = await library()
-    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}):
+    with override_settings(AIODRF={"REPRESENTATION_MODE": "inline"}, FASTDRF={}):
         created = await AsyncAPIClient().post(
             "/books/",
             {"title": "T", "isbn": "T", "author": lib["ursula"].pk, "tags": []},
@@ -469,7 +469,7 @@ async def test_a_failure_in_the_save_rolls_back_with_atomic_save(api):
             )
         assert not await orm(Book.objects.filter(isbn="G").exists)
         with (
-            override_settings(AIODRF={"ATOMIC_SAVE": False}),
+            override_settings(AIODRF={"ATOMIC_SAVE": False}, FASTDRF={}),
             pytest.raises(RuntimeError, match="refused"),
         ):
             await api(

@@ -302,7 +302,7 @@ class DRFAuthors(ContextPolicies, drf_viewsets.ModelViewSet):
 class Authors(ContextPolicies, viewsets.ModelViewSet):
     async def list(self, request, *args, **kwargs):
         # ``run_sync``: the representation happens in a worker thread.
-        with override_settings(AIODRF={"REPRESENTATION_MODE": "thread"}):
+        with override_settings(AIODRF={"REPRESENTATION_MODE": "thread"}, FASTDRF={}):
             return Response(await aio.data(MomentSerializer({"at": MOMENT})))
 
 
@@ -477,7 +477,7 @@ class _RouterTests:
             await self.api("post", "/aiodrf/failing/", data={"name": "Ursula"})
         assert not await Author.objects.using("other").aexists()
         with (
-            override_settings(AIODRF={"ATOMIC_SAVE": False}),
+            override_settings(AIODRF={"ATOMIC_SAVE": False}, FASTDRF={}),
             pytest.raises(RuntimeError),
         ):
             await self.api("post", "/aiodrf/failing/", data={"name": "Ursula"})

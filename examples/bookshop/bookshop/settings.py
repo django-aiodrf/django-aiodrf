@@ -71,9 +71,7 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {"TITLE": "Bookshop", "VERSION": "1.0.0"}
 
-AIODRF = {
-    # The HTTP client of the stock service, opened and closed with the server.
-    "LIFESPAN": "bookshop.lifecycle.lifespan",
-}
+AIODRF = {}
+DJANGO_LIFESPAN = "bookshop.lifecycle.lifespan"
 
 STOCK_SERVICE_URL = os.environ.get("STOCK_SERVICE_URL", "")

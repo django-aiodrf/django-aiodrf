@@ -13,8 +13,8 @@ sent.
 
 Django's own `get_asgi_application()` is enough for most projects. Use
 `aiodrf.asgi.get_asgi_application()` in `asgi.py` when you need a
-[lifespan context manager](lifespan.md) for resources, or startup and shutdown
-signals. It wraps Django's application and does not modify Django's handler.
+[lifespan context manager](lifespan.md) for resources, and install `django-aiodrf[lifespan]`. For signal-only applications, use
+`aiodrf_asgi_lifespan.asgi.get_asgi_application()`.
 With `AIODRF["REQUEST_THREADS"]` set, it also keeps the threads that run
 requests' synchronous code for later requests, instead of starting two threads
 per request ([setting](../reference/settings.md#request_threads)).
@@ -82,8 +82,8 @@ repeated; it inspects the named classes only, and their `usages` list is empty.
 Each serializer is instantiated without a request, so its constructor runs:
 inspect only code you trust. A path that cannot be imported or does not name a
 DRF serializer raises `CommandError`. To inspect an instance built for a
-specific request, call `aiodrf.contrib.compiler.report_details(serializer)` or
-`aiodrf.contrib.inputs.report_input_details(serializer)`. A serializer whose
+specific request, call `fastdrf.compiler.report_details(serializer)` or
+`fastdrf.inputs.report_input_details(serializer)`. A serializer whose
 input can be compiled may still pass a particular payload to DRF for
 validation.
 
@@ -92,3 +92,9 @@ To see where a request runs synchronous code in worker threads, wrap it in
 without logging request data. It does not count the thread switches Django
 makes itself (synchronous middleware, signals). Enable it in tests and
 diagnostics only, not while measuring throughput.
+
+## Static files
+
+For new deployments use ServeStatic or serve collected static files through
+your reverse proxy. `aiodrf.contrib.whitenoise` remains available in aiodrf;
+its adapter is planned for future deprecation, without a separate package.

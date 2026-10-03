@@ -1,253 +1,101 @@
-"""Django's ASGI application with signals and an optional resource context.
-
-``AIODRF['LIFESPAN']`` names a zero-argument async context manager factory.
-Its yielded value is available through ``get_lifespan_state(request, Type)``.
-The factory runs once per lifespan connection, on the server's event loop;
-the wrapper and settings never retain the resource across connections.
-
-``AIODRF['REQUEST_THREADS']`` (opt-in) keeps the threads that run requests'
-synchronous code for later requests instead of starting and joining two
-threads per request, as Django's handler does through asgiref.
-"""
+"""Django ASGI construction with optional lifespan and request thread reuse."""
 
 from __future__ import annotations
 
+import asyncio
 import itertools
 import threading
-import traceback
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
-from dataclasses import dataclass
-from inspect import isasyncgen, iscoroutine
-from typing import TYPE_CHECKING, Any, cast, overload
+from contextlib import asynccontextmanager, nullcontext
+from typing import Any
 
-import django
 from asgiref.sync import SyncToAsync, ThreadSensitiveContext
-from asgiref.typing import ASGIReceiveCallable, ASGISendCallable, Scope
-from django.core.asgi import get_asgi_application as _django_application
+from django.conf import settings
+from django.core.asgi import get_asgi_application as django_application
 from django.core.exceptions import ImproperlyConfigured
 from django.core.handlers.asgi import ASGIHandler
-from django.dispatch import Signal
 
-from aiodrf.settings import aiodrf_settings, resolve_lifespan
-from aiodrf.signals import asgi_shutdown, asgi_startup
+from aiodrf.settings import aiodrf_settings
 
-if TYPE_CHECKING:
-    from django.http import HttpRequest
-    from rest_framework.request import Request
-
-__all__ = [
-    "LifespanApplication",
-    "LifespanFactory",
-    "get_asgi_application",
-    "get_lifespan_state",
-]
-
-type LifespanFactory[T] = Callable[[], AbstractAsyncContextManager[T]]
-
+__all__ = ["get_asgi_application"]
 _UNSET = object()
-_STATE_KEY = "aiodrf.lifespan"
+_THREAD_STATE_KEY = "aiodrf.request_threads"
 
 
-@dataclass(slots=True)
-class _LifespanState:
-    value: object
-    active: bool = True
-
-    def invalidate(self, state: dict[str, object]) -> None:
-        self.active = False
-        # Request scopes shallow-copy this marker. Invalidate access and drop
-        # its reference so retained requests do not keep a closed pool alive.
-        self.value = None
-        if state.get(_STATE_KEY) is self:
-            del state[_STATE_KEY]
-
-
-def get_lifespan_state[T](request: HttpRequest | Request, expected_type: type[T]) -> T:
-    """Return the live, typed resource; never create one on first access.
-
-    ``expected_type`` must support ``isinstance`` (a dataclass is suitable;
-    ``TypedDict`` is not). Both Django and DRF requests are accepted.
-    """
-    # ``state`` is optional in the ASGI specification, and may be ``None``.
-    state = ((getattr(request, "scope", None) or {}).get("state") or {}).get(_STATE_KEY)
-    if not isinstance(state, _LifespanState) or not state.active:
+def get_asgi_application(*, lifespan: Any = _UNSET) -> Callable[..., Awaitable[None]]:
+    """Use aiodrf-asgi-lifespan only when a lifespan feature is selected."""
+    application = django_application()
+    idle_threads = aiodrf_settings.REQUEST_THREADS
+    factory = (
+        getattr(settings, "DJANGO_LIFESPAN", None) if lifespan is _UNSET else lifespan
+    )
+    if factory is None and idle_threads is None:
+        return application
+    try:
+        from aiodrf_asgi_lifespan import asgi
+        from aiodrf_asgi_lifespan import settings as lifespan_settings
+    except ModuleNotFoundError as exc:
+        if exc.name != "aiodrf_asgi_lifespan":
+            raise
         raise ImproperlyConfigured(
-            "No active aiodrf lifespan state. Use aiodrf's ASGI application with "
-            "a lifespan context manager and a server that propagates scope['state']."
-        )
-    if not isinstance(state.value, expected_type):
-        raise ImproperlyConfigured(
-            f"Lifespan state must be {expected_type.__qualname__}, "
-            f"not {type(state.value).__qualname__}."
-        )
-    return state.value
+            "Install django-aiodrf[lifespan] to use DJANGO_LIFESPAN or REQUEST_THREADS."
+        ) from exc
+    factory = lifespan_settings.resolve_lifespan(factory)
+    if idle_threads is None:
+        return asgi.LifespanApplication(application, lifespan=factory)
+    return _ThreadLifespanApplication(_ThreadKeepingHandler(), idle_threads, factory)
 
 
-async def _send_signal(signal: Signal, sender: object, scope: Scope) -> None:
-    # Robust dispatch waits for every receiver. A first failure must not
-    # leave other resource-owning receivers running after lifespan returns.
-    responses = await signal.asend_robust(sender=sender, scope=scope)
-    for _receiver, result in responses:
-        if isinstance(result, Exception):
-            raise result
+class _ThreadLifespanApplication:
+    """Publish an independent request pool in each server lifespan's state."""
 
-
-async def _expect_message(receive: ASGIReceiveCallable, phase: str) -> None:
-    message = await receive()
-    if message["type"] != f"lifespan.{phase}":
-        raise RuntimeError(f"Expected lifespan.{phase}, received {message['type']!r}.")
-
-
-class LifespanApplication:
-    """ASGI application answering ``lifespan`` and delegating the rest."""
-
-    def __init__(
-        self,
-        application: Callable[..., Awaitable[None]],
-        *,
-        lifespan: LifespanFactory[object] | None = None,
-    ) -> None:
+    def __init__(self, application: ASGIHandler, limit: int, factory: Any) -> None:
         self.application = application
-        self.lifespan = resolve_lifespan(lifespan)
+        self.limit = limit
+        self.factory = factory
 
-    async def __call__(
-        self, scope: Scope, receive: ASGIReceiveCallable, send: ASGISendCallable
-    ) -> None:
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope["type"] != "lifespan":
             await self.application(scope, receive, send)
             return
-        if self.lifespan is not None:
-            await self._managed_lifespan(scope, receive, send)
-            return
-        # Preserve the signal-only protocol for existing applications.
-        while True:
-            message = await receive()
-            if message["type"] == "lifespan.startup":
-                try:
-                    await _send_signal(asgi_startup, type(self), scope)
-                except Exception:  # noqa: BLE001 -- reported to the server, whatever it is
-                    await send(
-                        {
-                            "type": "lifespan.startup.failed",
-                            "message": traceback.format_exc(),
-                        }
-                    )
-                    return
-                else:
-                    await send({"type": "lifespan.startup.complete"})
-            elif message["type"] == "lifespan.shutdown":
-                try:
-                    await _send_signal(asgi_shutdown, type(self), scope)
-                except Exception:  # noqa: BLE001
-                    await send(
-                        {
-                            "type": "lifespan.shutdown.failed",
-                            "message": traceback.format_exc(),
-                        }
-                    )
-                else:
-                    await send({"type": "lifespan.shutdown.complete"})
-                return
+        from aiodrf_asgi_lifespan.asgi import LifespanApplication
 
-    async def _open_lifespan(self, stack: AsyncExitStack, scope: Scope) -> None:
-        context = self.lifespan()
-        if not isinstance(context, AbstractAsyncContextManager):
-            # A malformed sync factory can return a coroutine/generator.
-            # Do not execute it or leak an unawaited-coroutine warning.
-            if iscoroutine(context):
-                context.close()
-            elif isasyncgen(context):
-                await context.aclose()
-            raise ImproperlyConfigured(
-                "LIFESPAN must return an async context manager. "
-                "Use @contextlib.asynccontextmanager."
-            )
-        resource = await stack.enter_async_context(context)
-        if resource is None:
-            return
         state = scope.get("state")
-        if state is None:
-            raise ImproperlyConfigured(
-                "A lifespan yielding resources requires server support for scope['state']."
-            )
-        if _STATE_KEY in state:
-            raise ImproperlyConfigured(
-                "scope['state']['aiodrf.lifespan'] is already in use."
-            )
-        published = _LifespanState(resource)
-        state[_STATE_KEY] = published
-        # Remove access before __aexit__ starts closing the resource. All
-        # shallow request copies share the same invalidation marker.
-        stack.callback(published.invalidate, state)
-
-    async def _managed_lifespan(
-        self,
-        scope: Scope,
-        receive: ASGIReceiveCallable,
-        send: Callable[[Any], Awaitable[None]],
-    ) -> None:
-        phase = "startup"
-        stack = AsyncExitStack()
-        try:
-            try:
-                await _expect_message(receive, "startup")
-                await self._open_lifespan(stack, scope)
-                await _send_signal(asgi_startup, type(self), scope)
-                await send({"type": "lifespan.startup.complete"})
-                phase = "shutdown"
-                await _expect_message(receive, "shutdown")
-                await _send_signal(asgi_shutdown, type(self), scope)
-            except BaseException as exc:
-                try:
-                    await stack.__aexit__(type(exc), exc, exc.__traceback__)
-                finally:
-                    # Cleanup cannot suppress cancellation or interpreter exit.
-                    if not isinstance(exc, Exception):
-                        raise exc  # noqa: TRY201 -- preserve cancellation if cleanup raised
-                # Suppressing an exception inside the user's context must not
-                # turn a failed startup/shutdown into a success response.
-                raise
-            else:
-                await stack.aclose()
-        except Exception:  # noqa: BLE001 -- the ASGI protocol reports failures
+        if state is None or _THREAD_STATE_KEY in state:
+            await receive()
             await send(
-                {"type": f"lifespan.{phase}.failed", "message": traceback.format_exc()}
+                {
+                    "type": "lifespan.startup.failed",
+                    "message": "REQUEST_THREADS requires an unused ASGI scope['state'].",
+                }
             )
-        else:
-            await send({"type": "lifespan.shutdown.complete"})
+            return
+        threads = _RequestThreads(self.limit)
+        state[_THREAD_STATE_KEY] = threads
+        wrapper = LifespanApplication(
+            self.application, lifespan=_thread_lifespan(threads, self.factory)
+        )
+        try:
+            await wrapper(scope, receive, send)
+        finally:
+            state.pop(_THREAD_STATE_KEY, None)
+            await threads.aclose()
 
 
-@overload
-def get_asgi_application() -> LifespanApplication: ...
+def _thread_lifespan(threads: _RequestThreads, factory: Any) -> Any:
+    @asynccontextmanager
+    async def lifespan() -> AsyncGenerator[Any]:
+        async with factory() if factory is not None else nullcontext(None) as resource:
+            try:
+                yield resource
+            finally:
+                # Worker code can still refer to the user's resources.
+                # Finish it before closing the enclosing resource context.
+                await threads.aclose()
 
-
-@overload
-def get_asgi_application(
-    *, lifespan: LifespanFactory[object] | None
-) -> LifespanApplication: ...
-
-
-def get_asgi_application(*, lifespan: object = _UNSET) -> LifespanApplication:
-    """Wrap Django's application; explicit ``lifespan=None`` disables the setting."""
-    # What Django's ``get_asgi_application`` does first.
-    django.setup(set_prefix=False)
-    idle_threads = aiodrf_settings.REQUEST_THREADS
-    application: Callable[..., Awaitable[None]] = (
-        _django_application()
-        if idle_threads is None
-        else _ThreadKeepingHandler(_RequestThreads(idle_threads))
-    )
-    if lifespan is _UNSET:
-        lifespan = aiodrf_settings.LIFESPAN
-    return LifespanApplication(
-        application, lifespan=cast("LifespanFactory[object] | None", lifespan)
-    )
-
-
-# -- Request threads -------------------------------------------------------------
+    return lifespan
 
 
 class _RequestThreads:
@@ -269,12 +117,18 @@ class _RequestThreads:
         self._idle: deque[_RequestExecutor] = deque()
         self._lock = threading.Lock()
         self._numbers = itertools.count(1)
+        self._executors: set[_RequestExecutor] = set()
+        self._closed = False
 
     def lend(self) -> _RequestExecutor:
-        try:
-            return self._idle.pop()
-        except IndexError:
-            return _RequestExecutor(f"aiodrf-request-{next(self._numbers)}")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("The request thread lifespan is closed.")
+            if self._idle:
+                return self._idle.pop()
+            executor = _RequestExecutor(f"aiodrf-request-{next(self._numbers)}")
+            self._executors.add(executor)
+            return executor
 
     def give_back(self, executor: _RequestExecutor) -> None:
         """
@@ -293,10 +147,34 @@ class _RequestThreads:
 
     def _returned(self, executor: _RequestExecutor) -> None:
         with self._lock:
-            if len(self._idle) < self.idle_limit:
+            if not self._closed and len(self._idle) < self.idle_limit:
                 self._idle.append(executor)
                 return
+            self._executors.discard(executor)
         executor.shutdown(wait=False)
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
+            executors = tuple(self._executors)
+            self._executors.clear()
+            self._idle.clear()
+        # Joining must not hold the publication lock: a worker's final
+        # callback can still be returning its executor to this pool.
+        for executor in executors:
+            executor.shutdown(wait=True)
+
+    async def aclose(self) -> None:
+        pending = asyncio.create_task(asyncio.to_thread(self.close))
+        cancelled = False
+        while not pending.done():
+            try:
+                await asyncio.shield(pending)
+            except asyncio.CancelledError:
+                cancelled = True
+        pending.result()
+        if cancelled:
+            raise asyncio.CancelledError
 
     def idle_count(self) -> int:
         return len(self._idle)
@@ -361,10 +239,6 @@ class _LentThreadContext(ThreadSensitiveContext):
 class _ThreadKeepingHandler(ASGIHandler):
     """Django's ``ASGIHandler`` whose requests borrow ``request_threads``."""
 
-    def __init__(self, request_threads: _RequestThreads) -> None:
-        super().__init__()
-        self.request_threads = request_threads
-
     async def __call__(
         self,
         scope: dict[str, Any],
@@ -376,5 +250,10 @@ class _ThreadKeepingHandler(ASGIHandler):
             raise ValueError(
                 "Django can only handle ASGI/HTTP connections, not %s." % scope["type"]
             )
-        async with _LentThreadContext(self.request_threads):
+        threads = (scope.get("state") or {}).get(_THREAD_STATE_KEY)
+        if not isinstance(threads, _RequestThreads):
+            raise ImproperlyConfigured(
+                "REQUEST_THREADS requires ASGI lifespan startup and scope['state']."
+            )
+        async with _LentThreadContext(threads):
             await self.handle(scope, receive, send)

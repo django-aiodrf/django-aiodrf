@@ -24,8 +24,10 @@ use native asynchronous I/O.
 | Independent execution engine | Applications willing to change API contracts | Requires separate ecosystem adapters and migration |
 | Upstream DRF integration | Extension accepted into DRF itself | Must retain existing synchronous APIs; optional vendors belong outside core |
 
-Core dispatch does not monkeypatch Django or DRF. Optional optimizations live
-under `aiodrf.contrib.builtin`; vendor integrations remain separately selected.
+Core dispatch does not monkeypatch Django or DRF. Optional serializer
+optimizations come from django-fastdrf (configured with `FASTDRF`); aiodrf's own
+opt-ins (`list_prefetch`, `concurrent`) live under `aiodrf.contrib.builtin`;
+vendor integrations remain separately selected.
 See the [runtime adaptation inventory](../reference/runtime-adaptations.md) for
 the limited compatibility mechanisms that change runtime state.
 

@@ -205,7 +205,9 @@ async def test_schema_matches_live_items_without_opening_lifespan(
         override_settings(
             ROOT_URLCONF=urls,
             MIDDLEWARE=[],
-            AIODRF={"LIFESPAN": lifespan},
+            AIODRF={},
+            DJANGO_LIFESPAN=lifespan,
+            FASTDRF={},
         ),
         patched_settings({"OAS_VERSION": version, "COMPONENT_SPLIT_REQUEST": True}),
     ):

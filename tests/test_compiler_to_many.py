@@ -14,12 +14,12 @@ from django.db import connection, transaction
 from django.db.models import Prefetch
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
+from fastdrf import compiler
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from tests.testapp.models import Author, Book, Edition, Tag
 
 BACKENDS = ["msgspec", "pydantic", "python"]
@@ -91,7 +91,7 @@ def both(serializer_factory, backend, parity="strict"):
         "SERIALIZER_BACKEND_FALLBACK": "error",
     }
     with (
-        override_settings(AIODRF=settings),
+        override_settings(FASTDRF=settings, AIODRF={}),
         CaptureQueriesContext(connection) as queries,
     ):
         compiled = aio.try_data(serializer_factory())
@@ -267,7 +267,7 @@ def test_edits_of_a_nested_list_are_respected(library, backend):
     assert compiled == drf
     assert compiled[0]["tags"][0].keys() == {"id"}
     drf = assigned().data
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_data(assigned()) == drf
     assert sorted(drf[0]["tags"]) == ["blue", "green", "red"]
 
@@ -347,7 +347,7 @@ def test_what_is_not_a_related_manager_stays_on_drf(library, backend):
     for serializer_class, queryset, reason in cases:
         assert reason in compiler.report(serializer_class(queryset, many=True))
         drf = serializer_class(queryset, many=True).data
-        with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+        with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
             compiled = aio.try_data(serializer_class(queryset, many=True))
         assert compiled == drf
 
@@ -366,7 +366,7 @@ async def test_related_managers_are_queried_where_drf_would_query(
     tag = await Tag.objects.acreate(name="red")
     await book.tags.aadd(tag)
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         data = await aio.data(AuthorBooks(Author.objects.all(), many=True))
     tags = [{"id": tag.pk, "name": "red"}]
     assert data[0]["books"] == [{"id": book.pk, "title": "First", "tags": tags}]

@@ -289,14 +289,16 @@ def test_a_serializer_kind_that_is_not_allowed_fails_at_url_construction(
         queryset = Author.objects.all()
 
     with (
-        override_settings(AIODRF={"ALLOWED_SERIALIZER_BACKENDS": allowed}),
+        override_settings(FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": allowed}, AIODRF={}),
         pytest.raises(ImproperlyConfigured, match=rf"a {backend} serializer"),
     ):
         View.as_view(serializer_class=serializer_class)
 
 
 def test_schema_views_and_viewsets_are_checked_too():
-    with override_settings(AIODRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf", "msgspec"]}):
+    with override_settings(
+        FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf", "msgspec"]}, AIODRF={}
+    ):
         with pytest.raises(ImproperlyConfigured, match="a pydantic serializer"):
             PydanticBooks.as_view({"get": "list"})
         MsgspecBooks.as_view({"get": "list"})
@@ -317,7 +319,7 @@ async def test_a_serializer_chosen_per_request_is_checked_when_it_is_built():
     response = await view(AsyncAPIRequestFactory().get("/"))
     assert response.data == [{"name": "Ursula"}]
     with (
-        override_settings(AIODRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]}),
+        override_settings(FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]}, AIODRF={}),
         pytest.raises(ImproperlyConfigured, match="a pydantic serializer"),
     ):
         await view(AsyncAPIRequestFactory().get("/"))
@@ -325,14 +327,18 @@ async def test_a_serializer_chosen_per_request_is_checked_when_it_is_built():
 
 @pytest.mark.parametrize("value", [[], ["drf", "marshmallow"], "drf"])
 def test_the_setting_is_validated(value):
-    with override_settings(AIODRF={"ALLOWED_SERIALIZER_BACKENDS": value}):
-        ids = [message.id for message in checks.check_settings(app_configs=None)]
-    assert ids == ["aiodrf.E001"]
+    from fastdrf.checks import check_settings
+
+    with override_settings(FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": value}, AIODRF={}):
+        ids = [message.id for message in check_settings(app_configs=None)]
+    assert ids == ["fastdrf.E001"]
 
 
 def test_the_system_check_reports_every_view_that_is_not_allowed():
     with override_settings(
-        ROOT_URLCONF=__name__, AIODRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]}
+        ROOT_URLCONF=__name__,
+        FASTDRF={"ALLOWED_SERIALIZER_BACKENDS": ["drf"]},
+        AIODRF={},
     ):
         messages = checks.check_serializer_backends(app_configs=None)
     assert {message.id for message in messages} == {"aiodrf.E005"}
@@ -493,3 +499,50 @@ def test_a_pydantic_v1_model_is_refused_at_url_construction():
 
     with pytest.raises(ImproperlyConfigured, match=r"pydantic\.v1"):
         View.as_view()
+
+
+def test_aiodrfs_view_classes_leave_the_description_to_the_project():
+    # drf-spectacular describes an operation with the first docstring in the
+    # view's MRO before DRF's classes: one of aiodrf's would be published.
+    import inspect
+
+    from drf_spectacular.plumbing import get_doc
+
+    from aiodrf import generics as aio_generics
+    from aiodrf import mixins as aio_mixins
+    from aiodrf import views as aio_views
+    from aiodrf import viewsets as aio_viewsets
+
+    classes = [
+        aio_views.APIView,
+        SchemaViewMixin,
+        *(
+            value
+            for module in (aio_generics, aio_mixins, aio_viewsets)
+            for value in vars(module).values()
+            if isinstance(value, type)
+            and value.__module__ == module.__name__
+            and (
+                issubclass(value, aio_views.APIView) or value.__name__.endswith("Mixin")
+            )
+        ),
+    ]
+    from rest_framework.generics import GenericAPIView
+
+    def view(cls):
+        # A mixin is used with a DRF view.
+        bases = (cls,) if issubclass(cls, aio_views.APIView) else (cls, GenericAPIView)
+        return type("V", bases, {})
+
+    def published_by_aiodrf(cls):
+        # DRF's own docstrings are drf-spectacular's to exclude, not aiodrf's.
+        doc = get_doc(view(cls))
+        return doc and any(
+            klass.__module__.startswith("aiodrf.")
+            and klass.__doc__
+            and inspect.cleandoc(klass.__doc__) == doc
+            for klass in view(cls).__mro__
+        )
+
+    leaking = [cls.__qualname__ for cls in classes if published_by_aiodrf(cls)]
+    assert leaking == []

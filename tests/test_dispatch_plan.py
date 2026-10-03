@@ -133,7 +133,7 @@ async def test_purity_declared_by_the_settings_is_followed():
 
     view = Hello.as_view(permission_classes=[Setting])
     assert await hops_of(view) == ["APIView._acheck.<locals>.check_now"]
-    with override_settings(AIODRF={"PURE_POLICIES": [Setting]}):
+    with override_settings(AIODRF={"PURE_POLICIES": [Setting]}, FASTDRF={}):
         assert await hops_of(view) == []
     assert await hops_of(view) == ["APIView._acheck.<locals>.check_now"]
 

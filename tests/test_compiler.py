@@ -17,17 +17,17 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.test import override_settings
 from django.test.utils import isolate_apps
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler
 from tests.testapp.models import Author, Book, Edition
 
 BACKENDS = ["msgspec", "pydantic", "python"]
 
 
 async def compiled_data(backend, serializer):
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         return await aio.data(serializer)
 
 
@@ -229,7 +229,8 @@ def test_every_reason_not_to_compile_honours_the_fallback_setting(backend):
         pass
 
     with override_settings(
-        AIODRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"}
+        FASTDRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"},
+        AIODRF={},
     ):
         with pytest.raises(ImproperlyConfigured, match="overrides to_representation"):
             compiler.compiled_for(FilteredAuthorSerializer([], many=True))
@@ -241,7 +242,7 @@ def test_every_reason_not_to_compile_honours_the_fallback_setting(backend):
         ):
             compiler.compiled_for(Dynamic(Book()))
     # And with the default policy every one of them is DRF, quietly.
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert compiler.compiled_for(FilteredAuthorSerializer([], many=True)) is None
         assert compiler.compiled_for(Stamped(Edition())) is None
         with mock.patch.object(compiler, "MAX_VARIANTS", 0):
@@ -276,7 +277,7 @@ def test_a_method_assigned_to_a_field_keeps_drfs_output(backend):
     author = Author(pk=1, name="secret")
     book = Book(pk=2, author=author)
     redact = {"redact": True}
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         # Warm first with the plain variant, then the redacting one, and back.
         assert aio.try_data(RedactingAuthors(author)) == {"id": 1, "name": "secret"}
         assert aio.try_data(RedactingAuthors(author, context=redact)) == {
@@ -290,10 +291,11 @@ def test_a_method_assigned_to_a_field_keeps_drfs_output(backend):
         assert aio.try_data(RedactingAuthors(author)) == {"id": 1, "name": "secret"}
     with (
         override_settings(
-            AIODRF={
+            FASTDRF={
                 "SERIALIZER_BACKEND": backend,
                 "SERIALIZER_BACKEND_FALLBACK": "error",
-            }
+            },
+            AIODRF={},
         ),
         pytest.raises(ImproperlyConfigured, match="assigned to the instance"),
     ):
@@ -332,7 +334,7 @@ def test_a_method_assigned_to_a_list_or_its_items_keeps_drfs_output(
     authors = [Author(pk=n, name="private") for n in range(rows)]
     expected = hooked(authors).data
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": fallback}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         # The class entry is warm: the plain list compiles.
         assert (
             aio.try_data(AuthorOnly(authors, many=True))
@@ -358,7 +360,7 @@ def test_a_method_assigned_to_a_list_or_its_items_keeps_drfs_output(
 def _both(serializer_factory, backend, parity="strict"):
     drf = serializer_factory().data
     settings = {"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_PARITY": parity}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         return drf, aio.try_data(serializer_factory())
 
 
@@ -680,7 +682,7 @@ class AuthorWithMethod(drf_serializers.ModelSerializer):
 
 def compiled_without_signature(serializer, backend):
     with (
-        override_settings(AIODRF={"SERIALIZER_BACKEND": backend}),
+        override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}),
         mock.patch.object(compiler, "signature", wraps=compiler.signature) as signature,
     ):
         data = aio.try_data(serializer)
@@ -743,10 +745,11 @@ def test_a_class_that_owns_its_output_is_refused_without_reading_its_fields(back
         assert compiled_without_signature(serializer, backend) == ({"text": "Ada"}, 0)
     with (
         override_settings(
-            AIODRF={
+            FASTDRF={
                 "SERIALIZER_BACKEND": backend,
                 "SERIALIZER_BACKEND_FALLBACK": "error",
-            }
+            },
+            AIODRF={},
         ),
         pytest.raises(ImproperlyConfigured, match="overrides to_representation"),
     ):
@@ -814,7 +817,7 @@ class AsyncMethodAuthor(drf_serializers.ModelSerializer):
 async def test_a_static_serializer_with_async_representation_is_awaited(backend):
     # It never reaches the compiler, so the "error" fallback does not apply.
     author = Author(pk=1, name="Ada")
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert aio.try_data(AsyncMethodAuthor(author)) is aio.NEEDS_AWAIT
         assert await aio.data(AsyncMethodAuthor(author)) == {"id": 1, "shout": "ADA"}
 
@@ -862,6 +865,6 @@ async def test_schema_serializers_are_not_the_compilers(backend, many):
     for serializer_class in (MsgspecAuthorSerializer, PydanticAuthorSerializer):
         source = [Author(id=1, name="Ursula")] if many else Author(id=1, name="Ursula")
         expected = serializer_class(source, many=many).data
-        with override_settings(AIODRF=settings):
+        with override_settings(FASTDRF=settings, AIODRF={}):
             assert compiler.compiled_for(serializer_class(source, many=many)) is None
             assert await aio.data(serializer_class(source, many=many)) == expected

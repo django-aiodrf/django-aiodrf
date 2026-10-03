@@ -13,10 +13,10 @@ from unittest import mock
 
 import pytest
 from django.test import override_settings
+from fastdrf import compiler
 from rest_framework import serializers as drf_serializers
 
 from aiodrf import viewsets
-from aiodrf.contrib import compiler
 from aiodrf.test import AsyncAPIRequestFactory
 from tests.testapp.models import Author
 
@@ -58,7 +58,7 @@ class Edited(Authors):
 async def _write(view_class, backend, method):
     signature = mock.Mock(wraps=compiler.signature)
     with (
-        override_settings(AIODRF={"SERIALIZER_BACKEND": backend}),
+        override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}),
         mock.patch.object(compiler, "signature", signature),
     ):
         if method == "create":

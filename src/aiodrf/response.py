@@ -2,8 +2,9 @@
 Responses of async views.
 
 :class:`Response` is DRF's, rendered on the event loop when that is known to
-be safe. :class:`DataResponse` (opt-in) is Django's ``HttpResponse`` with the
-content DRF's JSON renderers produce, without DRF's template response. The streaming responses render one item at a time from an async
+be safe. django-fastdrf's :class:`fastdrf.response.DataResponse` (opt-in), which
+aiodrf's views resolve, is Django's ``HttpResponse`` with the content DRF's
+JSON renderers produce, without DRF's template response. The streaming responses render one item at a time from an async
 iterable: :class:`StreamingResponse` as newline-delimited JSON,
 :class:`StreamingArrayResponse` as one JSON array, and
 :class:`EventStreamResponse` as server-sent events. Django's ASGI handler
@@ -20,36 +21,37 @@ import decimal
 import marshal
 import math
 import uuid
-import weakref
 from collections import OrderedDict
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
-    Callable,
     Generator,
     Iterable,
-    Iterator,
     Mapping,
 )
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
 from asgiref.sync import markcoroutinefunction
-from django.http import HttpResponse, HttpResponseBase, StreamingHttpResponse
-from django.template.response import ContentNotRenderedError, SimpleTemplateResponse
+from django.http import HttpResponseBase, StreamingHttpResponse
+from django.template.response import SimpleTemplateResponse
+from fastdrf import response as _fastdrf_response
+
+# django-fastdrf's, which maintains them: the renderers DataResponse and the
+# event loop render with, and the responses that release their request
+# objects.
+from fastdrf.renderers import _DATA_RENDERERS
+from fastdrf.response import DataResponse, _render_data
 from rest_framework import renderers, response
-from rest_framework.compat import LONG_SEPARATORS, SHORT_SEPARATORS
 from rest_framework.exceptions import ErrorDetail
-from rest_framework.serializers import BaseSerializer, ListSerializer
 from rest_framework.utils.serializer_helpers import ReturnDict, ReturnList
 
 import aiodrf._builtins  # noqa: F401 -- registers DRF's pure renderers
 from aiodrf.hooks import require_sync_hooks
-from aiodrf.utils import is_pure, run_sync, user_defines
+from aiodrf.utils import is_framework_class, is_pure, run_sync, user_defines
 
 __all__ = [
-    "DataResponse",
     "EventStreamResponse",
     "Response",
     "ServerSentEvent",
@@ -79,7 +81,6 @@ _PLAIN_KEYS = frozenset((str, int, float, bool, type(None), ErrorDetail))
 # Renderers whose encoder would evaluate what ``_plain_data`` refuses (lazy
 # strings, QuerySets): they render on the loop only after that check. Exact
 # classes, so a subclass that changes the encoder is not assumed to be safe.
-_PAYLOAD_CHECKED_RENDERERS = {renderers.JSONRenderer}
 _PLAIN_TIMEZONES = frozenset((type(None), datetime.timezone, ZoneInfo))
 
 
@@ -173,78 +174,14 @@ def _plain_data(data: Any) -> bool:
     return True
 
 
-def _without_indent(
-    members: Any, accepted_media_type: Any, renderer_context: Any
-) -> bool:
+def _framework_data_renderer(renderer_class: type) -> bool:
     """
-    Whether a kept renderer may render without ``get_indent``: the
-    ``(class, name, member)`` it was written for are unchanged, and no
-    media-type parameter or context ``indent`` asks for an indentation.
+    A renderer of DRF's or django-fastdrf's that renders a payload with no
+    code but its own: plain data renders on the loop. A class the project
+    registered with ``fastdrf.registry.register_data_renderer`` is the
+    project's code, which renders on the loop only when declared pure.
     """
-    return (
-        all(vars(owner).get(name) is member for owner, name, member in members)
-        and not (accepted_media_type and ";" in accepted_media_type)
-        and not (renderer_context and renderer_context.get("indent") is not None)
-    )
-
-
-def _dumps_encoder(renderer: Any) -> Any:
-    """
-    The encoder ``json.dumps`` builds in DRF's ``JSONRenderer.render``: its
-    arguments, the ones ``dumps`` passes explicitly included.
-    """
-    return renderer.encoder_class(
-        skipkeys=False,
-        ensure_ascii=renderer.ensure_ascii,
-        check_circular=True,
-        allow_nan=not renderer.strict,
-        indent=None,
-        separators=SHORT_SEPARATORS if renderer.compact else LONG_SEPARATORS,
-        default=None,
-        sort_keys=False,
-    )
-
-
-class _KeptEncoderJSONRenderer(renderers.JSONRenderer):
-    """
-    DRF's ``JSONRenderer`` with the encoder its ``render`` builds per call
-    kept, one per configuration of the class as it is now (a project may set
-    ``encoder_class`` or the flags after aiodrf is imported): DRF's bytes.
-    Changed ``render`` or ``get_indent`` members, and indentations, run
-    ``JSONRenderer.render``.
-    """
-
-    _members = (
-        (renderers.JSONRenderer, "render", renderers.JSONRenderer.render),
-        (renderers.JSONRenderer, "get_indent", renderers.JSONRenderer.get_indent),
-    )
-    # (encoder_class, ensure_ascii, compact, strict) -> the encoder DRF builds
-    _encoders: ClassVar[dict[tuple[Any, ...], Any]] = {}
-
-    def render(
-        self, data: Any, accepted_media_type: Any = None, renderer_context: Any = None
-    ) -> Any:
-        if data is None or not _without_indent(
-            self._members, accepted_media_type, renderer_context
-        ):
-            return super().render(data, accepted_media_type, renderer_context)
-        key = (self.encoder_class, self.ensure_ascii, self.compact, self.strict)
-        encoder = self._encoders.get(key)
-        if encoder is None:
-            # ``json.dumps``'s arguments in DRF's ``render``, the rest default.
-            encoder = self._encoders.setdefault(
-                key,
-                _dumps_encoder(self),
-            )
-        # What DRF's ``render`` returns after ``json.dumps``.
-        ret = encoder.encode(data)
-        return ret.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029").encode()
-
-
-# Exact renderer class -> an instance that renders the same bytes with less work.
-_KEPT_ENCODER_RENDERERS: dict[type, renderers.JSONRenderer] = {
-    renderers.JSONRenderer: _KeptEncoderJSONRenderer()
-}
+    return renderer_class in _DATA_RENDERERS and is_framework_class(renderer_class)
 
 
 @markcoroutinefunction
@@ -252,7 +189,7 @@ def _render_checked(instance: Any) -> Any:
     """Render known payloads inline; unknown values keep their worker boundary."""
     if _plain_data(instance.data):
         renderer = instance.accepted_renderer
-        kept = _KEPT_ENCODER_RENDERERS.get(type(renderer))
+        kept = _DATA_RENDERERS.get(type(renderer))
         if kept is None:
             return SimpleTemplateResponse.render(instance)
         # For this call only: the same bytes, without building an encoder.
@@ -286,8 +223,9 @@ class _Render:
     the response, which is itself awaitable. Both kinds of caller therefore
     get a rendered response and the async handler saves a thread hop.
 
-    DRF's own ``JSONRenderer`` (and aiodrf's msgspec renderer) renders on
-    the loop only after a structural check of the payload. Unknown values go to the worker before encoding
+    DRF's ``JSONRenderer`` and django-fastdrf's registered JSON renderers run
+    on the loop only after a structural check of the payload. Unknown values
+    go to the worker before encoding
     starts. A renderer the project declared pure renders on the loop as
     declared. Every other renderer (the browsable API, templates) keeps the
     ordinary method, so Django renders it in a thread.
@@ -298,7 +236,7 @@ class _Render:
             return SimpleTemplateResponse.render
         renderer = getattr(instance, "accepted_renderer", None)
         if (
-            type(renderer) in _PAYLOAD_CHECKED_RENDERERS
+            _framework_data_renderer(type(renderer))
             and not vars(renderer)
             and not instance._is_rendered
             and not instance._post_render_callbacks
@@ -318,7 +256,7 @@ class _Render:
         ):
             return SimpleTemplateResponse.render.__get__(instance, owner)
 
-        if type(renderer) in _PAYLOAD_CHECKED_RENDERERS:
+        if _framework_data_renderer(type(renderer)):
             # An instance can replace render(), get_indent() or its encoder.
             # Payload inspection does not establish that such code is pure.
             return SimpleTemplateResponse.render.__get__(instance, owner)
@@ -328,9 +266,10 @@ class _Render:
         return SimpleTemplateResponse.render.__get__(instance, owner)
 
 
-class Response(response.Response):
+class Response(_fastdrf_response.Response):
     """
-    DRF's ``Response`` with an inline render path for JSON-like renderers.
+    DRF's ``Response`` with an inline render path for JSON-like renderers,
+    which releases its request objects when closed (django-fastdrf's).
 
     Instances are awaitable (awaiting returns the response itself) so that
     Django's async handler can await the result of ``render()``.
@@ -341,166 +280,6 @@ class Response(response.Response):
     def __await__(self) -> Generator[Any, None, Any]:
         return self
         yield  # pragma: no cover - makes this a generator
-
-    def close(self) -> None:
-        super().close()
-        _release(self)
-
-
-def _release(response: Any) -> None:
-    """
-    Cut the back-references of a closed response's request objects.
-
-    DRF's view refers to its request and response and those to the view
-    (``renderer_context``, ``parser_context``), and Django's ``setup`` gives
-    the view a bound ``head``: cycles that keep the request, its body and the
-    payload alive until the cyclic collector runs. Without the references
-    below, reference counting frees them once the server lets the response
-    go. What the response keeps (``data``, ``renderer_context``'s view and
-    request, their attributes) stays readable after ``close()``.
-    """
-    context = getattr(response, "renderer_context", None)
-    if type(context) is not dict:
-        return
-    if context.get("response") is response:
-        del context["response"]
-    view = context.get("view")
-    state = getattr(view, "__dict__", None)
-    if state:
-        if state.get("response") is response:
-            del state["response"]
-        head = state.get("head")
-        if (
-            getattr(head, "__self__", None) is view
-            and "head" not in type(view).__dict__
-        ):
-            del state["head"]  # ``View.setup``'s alias of ``get``
-    request = context.get("request")
-    parser_context = getattr(request, "parser_context", None)
-    if type(parser_context) is dict:
-        if parser_context.get("view") is view:
-            del parser_context["view"]
-        if parser_context.get("request") is request:
-            del parser_context["request"]  # set by DRF's ``Request.__init__``
-    _release_data(response.data)
-
-
-# What DRF's ``serializer.data`` returns, referring to its serializer.
-_RETURNED = (ReturnList, ReturnDict)
-
-
-def _release_data(data: Any) -> None:
-    if type(data) is dict:
-        for value in data.values():
-            if type(value) in _RETURNED:
-                _release_serializer(value.serializer)
-    elif type(data) in _RETURNED:
-        _release_serializer(data.serializer)
-
-
-def _release_serializer(serializer: Any) -> None:
-    """
-    The cycles of a serializer whose data the response returned
-    (``ReturnList.serializer``): its bound fields refer back to it, and a list
-    serializer's child to the list, which holds the instances. The fields are
-    DRF's ``cached_property`` (built again if read); the child keeps a weak
-    reference to the list.
-    """
-    if serializer is None:
-        return
-    pending = [serializer]
-    while pending:
-        current = pending.pop()
-        child = getattr(current, "child", None)
-        if isinstance(current, ListSerializer) and child is not None:
-            if child.parent is current:
-                child.parent = weakref.proxy(current)
-            pending.append(child)
-            continue
-        fields = current.__dict__.pop("fields", None)
-        if fields is not None:
-            pending.extend(
-                field for field in fields.values() if isinstance(field, BaseSerializer)
-            )
-
-
-# Django's ``HttpResponse.content`` accessors, which ``DataResponse`` guards.
-_get_content = cast(
-    "Callable[[HttpResponse], bytes]", vars(HttpResponse)["content"].fget
-)
-_set_content = cast(
-    "Callable[[HttpResponse, object], None]", vars(HttpResponse)["content"].fset
-)
-
-
-class DataResponse(HttpResponse):
-    """
-    ``data`` rendered into Django's ``HttpResponse`` when the view finalizes
-    it, with the renderer DRF's content negotiation accepted.
-
-    With DRF's ``JSONRenderer`` or the msgspec renderer, the status, content
-    and headers are those of DRF's :class:`Response`, without its template
-    response: there is no separate ``render()`` step (so no
-    ``process_template_response`` middleware) and, of DRF's attributes, only
-    ``renderer_context``. Once rendered it keeps its content only, as
-    Django's responses do: ``data`` is None (tests read ``response.json()``).
-    Any other renderer (the browsable API reads DRF's response) gets DRF's
-    :class:`Response`, with the headers and cookies set here.
-    """
-
-    # Set on the instance only when they differ.
-    renderer_context = None
-    exception = False
-    _explicit_content_type = None
-
-    def __init__(
-        self,
-        data: Any = None,
-        status: Any = None,
-        headers: Any = None,
-        content_type: str | None = None,
-    ) -> None:
-        # DRF's ``Response`` arguments, checked as DRF checks them.
-        if isinstance(data, BaseSerializer):
-            raise AssertionError(  # noqa: TRY004 -- DRF's error for the mistake
-                "You passed a Serializer instance as data, but "
-                "probably meant to pass serialized `.data` or "
-                "`.error`. representation."
-            )
-        super().__init__(status=status, content_type=content_type)
-        self.data = data
-        if content_type is not None:
-            self._explicit_content_type = content_type
-        if headers:
-            for name, value in headers.items():
-                self[name] = value
-
-    # An aiodrf view renders it; a view that cannot would send an empty body.
-    # Refused as Django's template responses refuse content before rendering.
-
-    @property
-    def content(self) -> bytes:
-        self._require_rendered()
-        return _get_content(self)
-
-    @content.setter
-    def content(self, value: Any) -> None:
-        _set_content(self, value)
-
-    def __iter__(self) -> Iterator[bytes]:
-        self._require_rendered()
-        return super().__iter__()
-
-    def _require_rendered(self) -> None:
-        if self.renderer_context is None:
-            raise ContentNotRenderedError(
-                "A DataResponse must be returned by an aiodrf view, which "
-                "renders it, before its content is accessed."
-            )
-
-    def close(self) -> None:
-        super().close()
-        _release(self)
 
 
 def resolve_data_response(
@@ -530,58 +309,15 @@ async def aresolve_data_response(
 
 
 def _data_renderer(view: Any, request: Any) -> Any:
-    renderer = getattr(request, "accepted_renderer", None)
-    if (
-        type(renderer) in _PAYLOAD_CHECKED_RENDERERS
-        and not vars(renderer)
-        # The project's finalize_response may change the data after DRF's,
-        # which renders later: it gets DRF's response.
-        and not user_defines(view, "finalize_response", "afinalize_response")
-    ):
-        return renderer
-    return None
-
-
-def _render_data(response: Any, view: Any, request: Any, renderer: Any) -> HttpResponse:
-    # DRF's ``Response.rendered_content`` and ``SimpleTemplateResponse.render``.
-    context = view.get_renderer_context()
-    content = _KEPT_ENCODER_RENDERERS.get(type(renderer), renderer).render(
-        response.data, request.accepted_media_type, context
-    )
-    if content:
-        content_type = response._explicit_content_type
-        if content_type is None:
-            content_type = (
-                renderer.media_type
-                if renderer.charset is None
-                else f"{renderer.media_type}; charset={renderer.charset}"
-            )
-        response["Content-Type"] = content_type
-    else:
-        del response["Content-Type"]
-    response.content = content
-    response.renderer_context = context
-    # Like Django's responses, it keeps its content only: the payload goes
-    # before the response is sent, not when it is closed.
-    _release_data(response.data)
-    response.data = None
-    return response
+    # django-fastdrf's, and aiodrf's async ``finalize_response`` too: the
+    # project's may change the data after DRF's, which renders later.
+    if user_defines(view, "afinalize_response"):
+        return None
+    return _fastdrf_response._data_renderer(view, request)
 
 
 def _drf_response(data_response: Any) -> Response:
-    drf_response = Response(
-        data_response.data,
-        status=data_response.status_code,
-        content_type=data_response._explicit_content_type,
-    )
-    for name, value in data_response.items():
-        if name.lower() != "content-type":
-            drf_response[name] = value
-    drf_response.cookies = data_response.cookies
-    drf_response.exception = data_response.exception
-    if data_response._reason_phrase is not None:
-        drf_response.reason_phrase = data_response._reason_phrase
-    return drf_response
+    return _fastdrf_response._drf_response(data_response, Response)
 
 
 def upgrade_response(resp: HttpResponseBase) -> HttpResponseBase:
@@ -597,15 +333,13 @@ def upgrade_response(resp: HttpResponseBase) -> HttpResponseBase:
 async def _arender(renderer: Any, data: Any) -> Any:
     """
     Render ``data`` with ``renderer``: on the event loop for DRF's
-    ``JSONRenderer`` and the msgspec renderer (in a thread when the data holds something it would
-    have to evaluate) and for renderers declared pure, in a thread for
+    ``JSONRenderer`` and django-fastdrf's registered JSON renderers (in a thread
+    when the data holds something they would have to evaluate) and for renderers declared pure, in a thread for
     every other.
     """
-    if type(renderer) in _PAYLOAD_CHECKED_RENDERERS:
+    if _framework_data_renderer(type(renderer)):
         if not vars(renderer) and _plain_data(data):
-            return _render_item(
-                _KEPT_ENCODER_RENDERERS.get(type(renderer), renderer), data
-            )
+            return _render_item(_DATA_RENDERERS[type(renderer)] or renderer, data)
     elif is_pure(renderer, "render"):
         return _render_item(renderer, data)
     return await run_sync(_render_item)(renderer, data)

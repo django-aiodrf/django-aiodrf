@@ -1,5 +1,9 @@
 # Async caching
 
+Native backends and middleware are provided by the optional `aiodrf-async-cache`
+package. Install its `redis` or `valkey` extra. Lifespan integration additionally
+uses `aiodrf-asgi-lifespan`; neither package requires aiodrf.
+
 An `aget()` method does not establish native network I/O. Django's default
 async cache methods adapt synchronous operations to a worker thread. aiodrf
 supports those backends unchanged and provides explicit native alternatives.
@@ -8,8 +12,8 @@ supports those backends unchanged and provides explicit native alternatives.
 | --- | --- | --- |
 | Django Redis / `django_redis.cache.RedisCache` | Thread-adapted synchronous commands | Supported through the synchronous API |
 | `django_valkey.async_cache.cache.AsyncValkeyCache` | Native valkey-py coroutines | Not compatible directly; use the async adapter below |
-| `aiodrf.contrib.redis.AsyncRedisCache` | Native redis-py coroutines | Async-only; use the native adapter, or a separate sync alias for standard middleware |
-| `aiodrf.contrib.valkey.AsyncValkeyCache` | Native valkey-py coroutines | Async-only; awaited callbacks, Sentinel and Cluster with the same cache contract as the Redis adapter |
+| `aiodrf_async_cache.redis.AsyncRedisCache` | Native redis-py coroutines | Async-only; use the native adapter, or a separate sync alias for standard middleware |
+| `aiodrf_async_cache.valkey.AsyncValkeyCache` | Native valkey-py coroutines | Async-only; awaited callbacks, Sentinel and Cluster with the same cache contract as the Redis adapter |
 
 The native adapter does not modify Django middleware, replace django-redis
 methods or turn sessions and DRF throttles into native consumers. Keep a
@@ -24,7 +28,7 @@ and `caches["name"]` selects another alias. No contrib adapter is needed to use
 Django's built-in Redis backend:
 
 ```python
-# settings.py; install redis separately, or the aiodrf redis extra.
+# settings.py; Django's RedisCache needs the redis package.
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
@@ -104,8 +108,8 @@ serialization match. Sharing data does not mean sharing connection pools.
 
 ## Backend configuration
 
-Choose one backend for the `native` alias. Install `django-aiodrf[valkey]`
-for django-valkey or `django-aiodrf[redis]` for redis-py. The latter does not
+Choose one backend for the `native` alias. Install `aiodrf-async-cache[django-valkey]`
+for django-valkey or `aiodrf-async-cache[redis]` for redis-py. The latter does not
 install django-redis; install that package separately if a synchronous alias
 uses it.
 
@@ -122,7 +126,7 @@ CACHES = {
         "KEY_PREFIX": "my-service",
         "TIMEOUT": 60,
         "OPTIONS": {
-            "CONNECTION_FACTORY": "aiodrf.contrib.valkey.LifespanConnectionFactory",
+            "CONNECTION_FACTORY": "aiodrf_async_cache.django_valkey.LifespanConnectionFactory",
             "CONNECTION_POOL_CLASS": "valkey.asyncio.connection.BlockingConnectionPool",
             "CONNECTION_POOL_KWARGS": {"max_connections": 20, "timeout": 2},
             "SOCKET_CONNECT_TIMEOUT": 2,
@@ -156,7 +160,7 @@ CACHES = {
         "KEY_PREFIX": "my-service",
     },
     "native": {
-        "BACKEND": "aiodrf.contrib.redis.AsyncRedisCache",
+        "BACKEND": "aiodrf_async_cache.redis.AsyncRedisCache",
         "LOCATION": "redis://127.0.0.1:6380/14",
         "KEY_PREFIX": "my-service",
         "TIMEOUT": 60,
@@ -218,7 +222,7 @@ verification still need validation.
 
 ### Valkey with awaited callbacks and topology support
 
-Use `aiodrf.contrib.valkey.AsyncValkeyCache` with the same lowercase options as
+Use `aiodrf_async_cache.valkey.AsyncValkeyCache` with the same lowercase options as
 `AsyncRedisCache`, a `valkey://` URL and, if specified, a
 `valkey.asyncio.connection.BlockingConnectionPool`. This is an explicit alternative
 backend using valkey-py, not a patch or subclass of django-valkey's client system.
@@ -231,7 +235,7 @@ keys with a vendor alias configured with another serializer or compressor.
 
 ```python
 CACHES["native"] = {
-    "BACKEND": "aiodrf.contrib.redis.AsyncRedisCache",
+    "BACKEND": "aiodrf_async_cache.redis.AsyncRedisCache",
     "LOCATION": "cache-primary",  # Sentinel service name, not a URL.
     "KEY_PREFIX": "my-service",
     "OPTIONS": {
@@ -258,7 +262,7 @@ may already have reached the server. Blindly retrying increments is not safe.
 
 ```python
 CACHES["native"] = {
-    "BACKEND": "aiodrf.contrib.redis.AsyncRedisCache",
+    "BACKEND": "aiodrf_async_cache.redis.AsyncRedisCache",
     "LOCATION": "redis://cluster-seed:6379/0",
     "KEY_PREFIX": "my-service",
     "OPTIONS": {
@@ -276,8 +280,8 @@ driver's `startup_nodes` objects in options. Native single-key counters remain
 atomic. `aget_many`, `aset_many` and `adelete_many` pipeline individual commands
 with `transaction=False`, so keys can occupy different hash slots. Each SET
 carries its TTL; partial completion remains possible. No cross-slot transaction
-or rollback is promised. `aclear()` is deliberately rejected in Cluster mode:
-cluster-wide FLUSHDB is an administrative operation, not prefix-scoped eviction.
+or rollback is promised. `aclear()` sends FLUSHDB to all primary nodes. It clears the entire cluster,
+including keys outside `KEY_PREFIX`; use a dedicated cache database.
 
 Use raw `cache.async_client.pipeline(transaction=False)` for explicit Cluster
 commands. Standalone and Sentinel pipelines may use transactions. Cluster capacity
@@ -293,7 +297,8 @@ Create one cache per server lifespan, outside Django's request-local registry:
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from aiodrf.contrib.async_cache import AsyncCache, cache_lifespan
+from aiodrf_async_cache.middleware import AsyncCache
+from aiodrf_async_cache.lifespan import cache_lifespan
 
 
 @asynccontextmanager
@@ -304,7 +309,7 @@ async def lifespan() -> AsyncGenerator[AsyncCache, None]:
 
 ```python
 # settings.py
-AIODRF = {"LIFESPAN": "myapp.lifecycle.lifespan"}
+DJANGO_LIFESPAN = "myapp.lifecycle.lifespan"
 
 # asgi.py
 from aiodrf.asgi import get_asgi_application
@@ -316,8 +321,8 @@ Use the concrete backend type when views need its full API. For Valkey, replace
 `AsyncRedisCache` below with the vendor's `AsyncValkeyCache`:
 
 ```python
-from aiodrf.asgi import get_lifespan_state
-from aiodrf.contrib.redis import AsyncRedisCache
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
+from aiodrf_async_cache.redis import AsyncRedisCache
 from aiodrf.response import Response
 from aiodrf.views import APIView
 
@@ -349,12 +354,12 @@ Replace the two cache middleware entries explicitly:
 
 ```python
 MIDDLEWARE = [
-    "aiodrf.contrib.async_cache.AsyncUpdateCacheMiddleware",
+    "aiodrf_async_cache.middleware.AsyncUpdateCacheMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "aiodrf.contrib.async_cache.AsyncFetchFromCacheMiddleware",
+    "aiodrf_async_cache.middleware.AsyncFetchFromCacheMiddleware",
 ]
 CACHE_MIDDLEWARE_SECONDS = 60
 CACHE_MIDDLEWARE_KEY_PREFIX = "pages"
@@ -478,7 +483,9 @@ Optional typed codecs import their dependencies only on construction:
 ```python
 from datetime import datetime
 from pydantic import BaseModel
-from aiodrf.contrib.cache_codecs import MsgspecCodec, PydanticCodec
+from fastdrf.codecs import PydanticCodec
+
+from aiodrf_async_cache.codecs import MsgspecCodec
 
 
 class Summary(BaseModel):

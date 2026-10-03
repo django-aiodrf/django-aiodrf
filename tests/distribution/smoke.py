@@ -4,12 +4,15 @@ import asyncio
 import importlib
 import importlib.util
 import sys
+import threading
 from importlib.metadata import version
 from importlib.resources import files
 from pathlib import Path
 
 import django
 from django.conf import settings
+from django.db import models
+from django.test import override_settings
 
 extra = sys.argv[1]
 settings.configure(
@@ -38,6 +41,7 @@ assert (
 dependencies = {
     "msgspec": "msgspec",
     "pydantic": "pydantic",
+    "orjson": "orjson",
     "filter": "django_filters",
     "spectacular": "drf_spectacular",
     "codemod": "libcst",
@@ -45,8 +49,7 @@ dependencies = {
     "tasks": "django_tasks",
     "whitenoise": "whitenoise",
     "granian": "granian",
-    "valkey": "django_valkey",
-    "redis": "redis",
+    "lifespan": "aiodrf_asgi_lifespan",
     "opensearch": "opensearchpy",
     "async-backend": "django_async_backend",
 }
@@ -62,11 +65,14 @@ if extra in (
     "spectacular",
     "opentelemetry",
     "whitenoise",
-    "valkey",
-    "redis",
     "opensearch",
 ):
     importlib.import_module(f"aiodrf.contrib.{extra}")
+elif extra == "orjson":
+    importlib.import_module("fastdrf.orjson.parsers")
+    importlib.import_module("fastdrf.orjson.renderers")
+elif extra == "lifespan":
+    importlib.import_module("aiodrf_asgi_lifespan.asgi")
 elif extra == "filter":
     importlib.import_module("aiodrf.filters")
 elif extra == "granian":
@@ -90,8 +96,68 @@ async def check():
     serializer = Input(data={"value": "12"})
     assert await serializer.ais_valid()
     assert serializer.validated_data == {"value": 12}
+    invalid = Input(data={"value": "not-an-integer"})
+    assert not await invalid.ais_valid()
+    assert invalid.errors["value"][0].code == "invalid"
+
+    from fastdrf import compiler
+
+    from aiodrf import aio
+
+    seen = []
+
+    class Record(models.Model):  # noqa: DJ008 -- in-memory distribution fixture
+        value = models.IntegerField()
+
+        class Meta:
+            app_label = "distribution_smoke"
+
+    class Output(serializers.ModelSerializer):
+        computed = serializers.SerializerMethodField()
+
+        class Meta:
+            model = Record
+            fields = ["value", "computed"]
+
+        def get_computed(self, instance):
+            seen.append(threading.current_thread() is threading.main_thread())
+            return instance.value + 1
+
+    with override_settings(
+        FASTDRF={
+            "SERIALIZER_BACKEND": "python",
+            "SERIALIZER_BACKEND_FALLBACK": "error",
+            "DELEGATE_FIELDS": True,
+        }
+    ):
+        output = Output(Record(value=3))
+        assert compiler.report_details(output, "strict", "python").delegated == (
+            "computed",
+        )
+        assert await aio.data(output) == {"value": 3, "computed": 4}
+        assert seen == [False]
+
+    if extra in ("pydantic", "orjson"):
+        from io import BytesIO
+
+        prefix = "PydanticJSON" if extra == "pydantic" else "ORJSON"
+        parser = getattr(
+            importlib.import_module(f"fastdrf.{extra}.parsers"), prefix + "Parser"
+        )
+        renderer = getattr(
+            importlib.import_module(f"fastdrf.{extra}.renderers"), prefix + "Renderer"
+        )
+        from aiodrf.response import Response
+
+        value = parser().parse(BytesIO(b'{"value":12}'))
+        response = Response(value)
+        response.accepted_renderer = renderer()
+        response.accepted_media_type = "application/json"
+        response.renderer_context = {}
+        assert (await response.render()).content == b'{"value":12}'
+
     if extra in ("msgspec", "pydantic"):
-        from aiodrf.contrib.inputs import recognize
+        from fastdrf.inputs import recognize
 
         assert recognize(Input(data={"value": 12}), backend=extra) == {"value": 12}
 

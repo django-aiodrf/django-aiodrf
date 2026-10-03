@@ -15,17 +15,19 @@ from typing import Any
 
 from django.db.models import Model, QuerySet
 from django.http import HttpResponseBase
+from fastdrf._compiled import FIELDS_FROM_CLASS
+from fastdrf.prefetch import auto_prefetch
+from fastdrf.settings import fastdrf_settings
 from rest_framework import generics, serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.serializers import BaseSerializer
 
 from aiodrf import aio, mixins, policies
-from aiodrf.aio._classify import FIELDS_FROM_CLASS, is_declarative_class
+from aiodrf.aio._classify import is_declarative_class
 from aiodrf.aio._loaded import reads_loaded
 from aiodrf.aio._represent import _uses_compiler
 from aiodrf.backends import compile_serializer
 from aiodrf.compat import FETCH_PEERS, FETCH_RAISE
-from aiodrf.contrib.builtin.prefetch import auto_prefetch
 from aiodrf.policies import Mode
 from aiodrf.request import Request
 from aiodrf.response import Response
@@ -221,7 +223,7 @@ class GenericAPIView[ModelT: Model](APIView, generics.GenericAPIView):
         """
         Mark ``serializer``, which this view built, validated and saved, when
         framework code alone did so: its fields are its class's
-        (``aio._classify.fields_from_class``).
+        (``fastdrf._compiled.fields_from_class``).
         """
         # Only the compiler reads the mark.
         if (
@@ -412,11 +414,11 @@ class GenericAPIView[ModelT: Model](APIView, generics.GenericAPIView):
         """
         Prepare the queryset used by ``list`` and ``aget_object``.
 
-        Applies ``AIODRF["FETCH_MODE"]`` (Django 6.1+) and, when the
+        Applies ``FASTDRF["FETCH_MODE"]`` (Django 6.1+) and, when the
         serializer sets ``Meta.auto_prefetch = True``, the ``select_related``
         and ``prefetch_related`` lookups its fields need.
         """
-        fetch_mode = _FETCH_MODES.get(aiodrf_settings.FETCH_MODE)
+        fetch_mode = _FETCH_MODES.get(fastdrf_settings.FETCH_MODE)
         if fetch_mode is not None:
             queryset = queryset.fetch_mode(fetch_mode)
         if self.serializer_class is None and not user_defines(

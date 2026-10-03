@@ -10,6 +10,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.http import QueryDict
 from django.test import override_settings
+from fastdrf import typed as fastdrf_typed
 from pydantic.alias_generators import to_camel
 
 from aiodrf.contrib import typed
@@ -134,26 +135,14 @@ def test_adapted_serializer_classes_are_bounded():
     # The adapted class refers to its schema, so a weak cache would never
     # let go of either; the cache is bounded instead.
     references = []
-    for index in range(typed.SCHEMA_CACHE_SIZE + 50):
+    for index in range(fastdrf_typed.SCHEMA_CACHE_SIZE + 50):
         schema = msgspec.defstruct(f"Transient{index}", [("value", int)])
         assert typed.adapt(schema) is typed.adapt(schema)
         references.append(weakref.ref(schema))
         del schema
     gc.collect()
     alive = sum(reference() is not None for reference in references)
-    assert alive <= typed.SCHEMA_CACHE_SIZE
-
-
-def test_a_class_in_use_survives_the_eviction_of_one_that_is_not():
-    cache = typed.BoundedCache(3)
-    for key in "abc":
-        cache.get(key, key.upper)
-    assert (
-        cache.get("a", lambda: pytest.fail("rebuilt")) == "A"
-    )  # used since the last sweep
-    cache.get("d", lambda: "D")  # evicts b, the oldest unused
-    cache.get("e", lambda: "E")  # evicts c
-    assert set(cache) == {"a", "d", "e"}
+    assert alive <= fastdrf_typed.SCHEMA_CACHE_SIZE
 
 
 def test_one_class_per_schema_under_concurrent_first_use():
@@ -163,20 +152,6 @@ def test_one_class_per_schema_under_concurrent_first_use():
     with ThreadPoolExecutor(16) as pool:
         classes = set(pool.map(lambda _: typed.adapt(schema), range(64)))
     assert len(classes) == 1
-
-
-@pytest.mark.parametrize("library", ["msgspec", "pydantic"])
-def test_derived_partial_schemas_are_bounded_too(library):
-    import importlib
-
-    module = importlib.import_module(f"aiodrf.contrib.{library}.serializers")
-    for index in range(typed.SCHEMA_CACHE_SIZE + 10):
-        if library == "msgspec":
-            schema = msgspec.defstruct(f"Partial{index}", [("value", int)])
-        else:
-            schema = pydantic.create_model(f"Partial{index}", value=(int, ...))
-        module._partial(schema)
-    assert len(module._partial_schemas) <= typed.SCHEMA_CACHE_SIZE
 
 
 class Tagged(msgspec.Struct):
@@ -198,7 +173,7 @@ def test_selected_backend_must_be_installed():
     from aiodrf import checks
 
     with override_settings(
-        AIODRF={"SERIALIZER_BACKEND": "msgspec", "ATOMIC_SAVE": "yes"}
+        AIODRF={"ATOMIC_SAVE": "yes"}, FASTDRF={"SERIALIZER_BACKEND": "msgspec"}
     ):
         ids = [message.id for message in checks.check_settings(app_configs=None)]
     # msgspec is installed here; the type error is reported.

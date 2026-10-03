@@ -1,5 +1,5 @@
 """
-``AIODRF["BATCH_RELATED_LOOKUPS"]``: ``PrimaryKeyRelatedField(many=True)``
+``FASTDRF["BATCH_RELATED_LOOKUPS"]``: ``PrimaryKeyRelatedField(many=True)``
 input is looked up with one query instead of one ``queryset.get(pk=...)`` per
 item. Everything but the queries must be what DRF produces: the instances and
 their order, the error and which item it names, and exceptions DRF lets
@@ -16,11 +16,11 @@ from django.http import QueryDict
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from fastdrf.settings import fastdrf_settings
 from rest_framework import serializers as drf_serializers
 from rest_framework.test import APIRequestFactory
 
 from aiodrf import aio, generics, serializers
-from aiodrf.settings import aiodrf_settings
 from tests.testapp.models import Author, Book, Shipment, Tag
 
 pytestmark = pytest.mark.django_db
@@ -220,25 +220,30 @@ def test_parity_with_drf(records, case, path):
     serializer_class = _serializer_class(**kwargs)
     with CaptureQueriesContext(connection) as drf_queries:
         reference = _outcome(serializer_class(data=data(records)), _drf)
-    with override_settings(AIODRF=ON), CaptureQueriesContext(connection) as queries:
+    with (
+        override_settings(FASTDRF=ON, AIODRF={}),
+        CaptureQueriesContext(connection) as queries,
+    ):
         serializer = serializer_class(data=data(records))
         assert _outcome(serializer, PATHS[path]) == reference
     assert "to_internal_value" not in vars(serializer.fields["tags"])
     if case in ONE_QUERY:
         assert len(queries) == 1
+    if case in QUERIES:
+        assert len(queries) == QUERIES[case]
     assert len(queries) <= len(drf_queries)
 
 
 ONE_QUERY = {
     "valid",
     "input order",
-    "duplicates",
     "strings",
     "float",
-    "html",
     "pk_field",
-    "character primary key",
 }
+# One query for the distinct keys, and DRF's own for each repeated item, whose
+# instance and mutable values are then its own (django-fastdrf 0.4).
+QUERIES = {"duplicates": 3, "html": 2, "character primary key": 2}
 
 
 @pytest.mark.parametrize("path", PATHS)
@@ -246,7 +251,7 @@ def test_partial_html_input_skips_the_field(tags, path):
     serializer_class = _serializer_class()
     reference = _outcome(serializer_class(data=QueryDict(""), partial=True), _drf)
     assert reference == (True, {}, {})
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert _outcome(
             serializer_class(data=QueryDict(""), partial=True), PATHS[path]
         ) == (reference)
@@ -255,7 +260,7 @@ def test_partial_html_input_skips_the_field(tags, path):
 @pytest.mark.parametrize("path", PATHS)
 def test_duplicates_are_distinct_instances(tags, path):
     # DRF gets every item with its own query.
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         serializer = _serializer_class()(data={"tags": _pks(tags, 0, 1, 0)})
         assert PATHS[path](serializer)
     first, _, again = serializer.validated_data["tags"]
@@ -279,10 +284,11 @@ def test_a_lookup_keeps_within_the_databases_parameter_limit(tags, path, monkeyp
         counts.append(len(params))
         return execute(sql, params, many, context)
 
-    # A method, so it holds on every connection; ``features.max_query_params``
-    # is cached per connection on some backends (PostgreSQL).
-    monkeypatch.setattr(type(connection.ops), "max_in_list_size", lambda self: 4)
-    with override_settings(AIODRF=ON), connection.execute_wrapper(count):
+    # A property of the class, so it holds on every connection.
+    monkeypatch.setattr(
+        type(connection.features), "max_query_params", property(lambda self: 4)
+    )
+    with override_settings(FASTDRF=ON, AIODRF={}), connection.execute_wrapper(count):
         assert _outcome(serializer_class(data=data), PATHS[path]) == reference
     # Eight distinct keys; the filter's own parameter leaves three per query.
     assert counts[:3] == [4, 4, 3]
@@ -300,12 +306,15 @@ def test_a_join_that_duplicates_rows_raises_as_in_drf(tags, path):
     data = {"tags": _pks(tags, 1, 1)}
     with pytest.raises(MultipleObjectsReturned):
         serializer_class(data=data).is_valid()
-    with override_settings(AIODRF=ON), pytest.raises(MultipleObjectsReturned):
+    with (
+        override_settings(FASTDRF=ON, AIODRF={}),
+        pytest.raises(MultipleObjectsReturned),
+    ):
         PATHS[path](serializer_class(data=data))
     # The first failing item is reported, as DRF stops there.
     data = {"tags": [999, *_pks(tags, 1)]}
     reference = _outcome(serializer_class(data=data), _drf)
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert _outcome(serializer_class(data=data), PATHS[path]) == reference
 
 
@@ -342,7 +351,7 @@ def test_a_create_looks_up_its_tags_in_one_query(tags, serializer_class, path):
     # The author, the unique ISBN, then one query per tag.
     assert _queries(serializer_class(data=data), _drf) == 5
     assert _queries(serializer_class(data=data), PATHS[path]) == 5
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert _queries(serializer_class(data=data), PATHS[path]) == 3
 
 
@@ -357,7 +366,7 @@ def test_nested_and_many_serializers(tags, path):
     ]
     for serializer_class, kwargs in cases:
         assert _queries(serializer_class(**kwargs), _drf) == 10
-        with override_settings(AIODRF=ON):
+        with override_settings(FASTDRF=ON, AIODRF={}):
             serializer = serializer_class(**kwargs)
             assert _queries(serializer, PATHS[path]) == 6
         assert _shape(serializer.validated_data) == _shape(
@@ -370,7 +379,7 @@ def test_nested_and_many_serializers(tags, path):
 def test_a_field_of_the_project_keeps_drfs_lookups(tags, field_class):
     serializer_class = _serializer_class(field_class=field_class)
     data = {"tags": [tags[2].pk, tags[2].pk]}
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert _queries(serializer_class(data=data), _aio) == 2
 
 
@@ -386,24 +395,24 @@ def test_a_pk_field_of_the_project_is_called_as_by_drf(tags):
     data = {"tags": [tags[0].pk, 999, tags[1].pk]}
     reference = _outcome(serializer_class(data=data), _drf)
     expected, calls[:] = list(calls), []
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert _outcome(serializer_class(data=data), _aio) == reference
     assert calls == expected
 
 
 def test_a_setting_that_is_not_a_boolean_is_refused():
     with (
-        override_settings(AIODRF={"BATCH_RELATED_LOOKUPS": "yes"}),
+        override_settings(FASTDRF={"BATCH_RELATED_LOOKUPS": "yes"}, AIODRF={}),
         pytest.raises(ImproperlyConfigured, match="BATCH_RELATED_LOOKUPS"),
     ):
-        aiodrf_settings.BATCH_RELATED_LOOKUPS  # noqa: B018
+        fastdrf_settings.BATCH_RELATED_LOOKUPS  # noqa: B018
 
 
 @pytest.mark.parametrize("backend", ["msgspec", "pydantic"])
 def test_input_recognition_declines_and_the_lookup_is_batched(tags, backend):
     author = Author.objects.create(name="Ursula")
     data = {"title": "T", "isbn": "1", "author": author.pk, "tags": _pks(tags, 0, 1, 2)}
-    with override_settings(AIODRF={**ON, "SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={**ON, "SERIALIZER_BACKEND": backend}, AIODRF={}):
         assert _queries(BookInput(data=data), _generic_view) == 3
 
 
@@ -429,5 +438,5 @@ def test_a_generic_create_saves_two_round_trips(tags):
         return len(queries)
 
     off = create("1")
-    with override_settings(AIODRF=ON):
+    with override_settings(FASTDRF=ON, AIODRF={}):
         assert create("2") == off - 2

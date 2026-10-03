@@ -270,7 +270,7 @@ automatic synchronization between models and search indexes. See
 **Native async caches.** django-valkey's native async backend is used by async
 code only; it does not replace the cache used by synchronous middleware or DRF
 throttles. The opt-in async cache middleware keeps Django's page-cache policy.
-aiodrf's redis.asyncio and Valkey backends support standalone, Sentinel and
+aiodrf-async-cache's Redis and Valkey backends support standalone, Sentinel and
 Cluster deployments, but not django-redis's Herd, compressor or client plugins.
 
 - Key, codec and default callbacks may be async; synchronous callbacks run in a
@@ -278,8 +278,8 @@ Cluster deployments, but not django-redis's Herd, compressor or client plugins.
   I/O.
 - Typed codecs cannot serialize cached pages and do not support server-side
   integer counters.
-- Cluster batches are not atomic across slots, and clearing the whole cluster is
-  not supported.
+- Cluster batches are not atomic across slots. `aclear()` flushes every primary,
+  including keys outside the configured prefix.
 - Synchronous middleware and throttles need a separate synchronous cache alias.
 - Connection pools belong to a lifespan and its event loop.
 - The django-valkey package replaces Django's cache-close signal receiver.

@@ -26,11 +26,8 @@ async def test_loaded_representation_does_not_repeat_async_classification(
     value = [author] if many else author
     expected = [{"id": 1, "name": "Ada"}] if many else {"id": 1, "name": "Ada"}
     with override_settings(
-        AIODRF={
-            "SERIALIZER_BACKEND": backend,
-            "REPRESENTATION_MODE": "inline",
-            "SERIALIZER_BACKEND_FALLBACK": "error",
-        }
+        AIODRF={"REPRESENTATION_MODE": "inline"},
+        FASTDRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": "error"},
     ):
         assert await aio.data(Data(value, many=many)) == expected
         with (
@@ -61,11 +58,11 @@ async def test_async_representation_keeps_the_override_without_evaluating_source
     source = Author.objects.all() if lazy else {"secret": 1}
     with (
         override_settings(
-            AIODRF={
+            AIODRF={"REPRESENTATION_MODE": "inline"},
+            FASTDRF={
                 "SERIALIZER_BACKEND": backend,
-                "REPRESENTATION_MODE": "inline",
                 "SERIALIZER_BACKEND_FALLBACK": "error",
-            }
+            },
         ),
         count_hops() as hops,
     ):

@@ -1,10 +1,11 @@
 """Representation: ``data``, ``to_representation`` and the compiled path."""
 
 import inspect
-from collections.abc import Callable
 from typing import Any
 
 from django.db import models
+from fastdrf._compiled import _declares_backend, _producer
+from fastdrf.settings import fastdrf_settings
 from rest_framework import fields, serializers
 from rest_framework.fields import SkipField
 from rest_framework.relations import PKOnlyObject
@@ -108,7 +109,7 @@ def _loop_data(serializer: Any, source: Any) -> Any:
     The compiled producer of ``serializer.data`` when it provably makes no
     query, so that it runs on the event loop in thread mode too, else None:
     a model instance whose class compiled to an encoder that reads only
-    columns the instance has loaded (:func:`aiodrf.contrib.compiler.loaded_encoder`).
+    columns the instance has loaded (:func:`fastdrf.compiler.loaded_encoder`).
     """
     if (
         not isinstance(source, models.Model)
@@ -116,9 +117,10 @@ def _loop_data(serializer: Any, source: Any) -> Any:
         or not is_bridge_base(definer(type(serializer), "data"))
     ):
         return None
-    from aiodrf.contrib.compiler import loaded_encoder
+    from fastdrf.compiler import loaded_encoder
 
-    encoder = loaded_encoder(serializer, source)
+    # ``source`` is ``serializer.instance``, which the encoder reads.
+    encoder = loaded_encoder(serializer)
     return None if encoder is None else _producer(serializer, encoder, source)
 
 
@@ -141,7 +143,7 @@ def _compiled_data(serializer: Any) -> Any:
     """
     ``serializer.data`` produced by a compiled msgspec/pydantic class, when
     ``SERIALIZER_BACKEND`` (or ``Meta.serializer_backend``) asks for one and
-    the serializer compiles (see :mod:`aiodrf.contrib.compiler`), None for
+    the serializer compiles (see :mod:`fastdrf.compiler`), None for
     DRF's code, or :data:`NEEDS_AWAIT`.
     """
     source = serializer.instance
@@ -152,12 +154,17 @@ def _compiled_data(serializer: Any) -> Any:
         or hasattr(serializer, "_data")
     ):
         return NEEDS_AWAIT if has_async_representation(serializer) else None
-    from aiodrf.contrib.compiler import compiled_for, declines_source
+    from fastdrf.compiler import compiled_for, declines_source
 
     # A static serializer is looked up by its class before it is classified:
     # classifying it the first time builds its fields, and an instance whose
-    # fields exist is compiled by its signature instead.
-    if not is_static(serializer) and has_async_representation(serializer):
+    # fields exist is compiled by its signature instead. A list's own awaited
+    # representation (``PrefetchListSerializer.aprefetch``) runs whatever
+    # its child compiles to: ``is_static`` speaks for the child only.
+    if (
+        isinstance(serializer, serializers.ListSerializer)
+        and _has_async_repr_override(serializer)
+    ) or (not is_static(serializer) and has_async_representation(serializer)):
         return NEEDS_AWAIT
     encoder = compiled_for(serializer)
     if encoder is None:
@@ -170,68 +177,8 @@ def _compiled_data(serializer: Any) -> Any:
     return _producer(serializer, encoder, source)
 
 
-def _producer(serializer: Any, encoder: Any, source: Any) -> Callable[[Any], Any]:
-    if isinstance(serializer, serializers.ListSerializer):
-
-        def produce(serializer: Any) -> Any:
-            from aiodrf.contrib.compiler import declines_source
-
-            items = (
-                source.all()
-                if isinstance(source, models.manager.BaseManager)
-                else source
-            )
-            items = list(items)
-            if declines_source(serializer, items):
-                # DRF's ListSerializer.to_representation, on the items read.
-                serializer._data = serializer.to_representation(items)
-                return serializer.data
-            try:
-                serializer._data = encoder.dump_many(items, serializer.context)
-            except encoder.error as exc:
-                serializer._data = _unreadable(serializer, exc, items)
-            return serializer.data
-
-    else:
-
-        def produce(serializer: Any) -> Any:
-            try:
-                serializer._data = encoder.dump(source, serializer.context)
-            except encoder.error as exc:
-                serializer._data = _unreadable(serializer, exc, source)
-            return serializer.data
-
-    return produce
-
-
-def _unreadable(serializer: Any, error: Exception, source: Any) -> Any:
-    """
-    DRF's representation of a source the compiled class failed to read, or
-    the backend's ``error`` when that is the result
-    (:func:`aiodrf.contrib.compiler.unreadable_source`). The backends take
-    any exception raised while reading an attribute for a missing attribute;
-    DRF's own read raises it as itself.
-    """
-    from aiodrf.contrib.compiler import unreadable_source
-
-    if not unreadable_source(serializer, error):
-        raise error
-    return serializer.to_representation(source)
-
-
 def _uses_compiler(serializer: Any) -> bool:
-    return aiodrf_settings.SERIALIZER_BACKEND != "drf" or _declares_backend(serializer)
-
-
-def _declares_backend(serializer: Any) -> bool:
-    target = (
-        serializer.child
-        if isinstance(serializer, serializers.ListSerializer)
-        else serializer
-    )
-    return (
-        getattr(getattr(target, "Meta", None), "serializer_backend", None) is not None
-    )
+    return fastdrf_settings.SERIALIZER_BACKEND != "drf" or _declares_backend(serializer)
 
 
 def _is_lazy(source: Any) -> bool:

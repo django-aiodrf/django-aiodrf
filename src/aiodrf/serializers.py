@@ -16,13 +16,13 @@ Plain DRF serializers work in aiodrf views as well (see :mod:`aiodrf.aio`),
 so this module is only needed for the async hooks above.
 """
 
-import copy
 import types
 from collections.abc import Coroutine, Generator
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import Model
 from django.db.models.manager import BaseManager
+from fastdrf._field_cache import _model_serializer_fields, _serializer_fields
 from rest_framework import serializers
 from rest_framework.fields import empty
 
@@ -31,7 +31,6 @@ from rest_framework.serializers import (
     LIST_SERIALIZER_KWARGS,
     LIST_SERIALIZER_KWARGS_REMOVE,
 )
-from rest_framework.settings import api_settings
 
 from aiodrf import aio
 from aiodrf.aio._classify import (
@@ -42,15 +41,6 @@ from aiodrf.aio._classify import (
 from aiodrf.aio._represent import default_data
 from aiodrf.aio._save import _atomic
 from aiodrf.compat import BigIntegerField
-from aiodrf.contrib.builtin.field_cache import (
-    _compiled_field_copy_plan,
-    _declared_copy_plan,
-    _field_copy_plan,
-    _field_template,
-    _fields_are_static,
-    _template_memo,
-)
-from aiodrf.contrib.builtin.field_options import field_options
 from aiodrf.utils import (
     Impl,
     bridge_base,
@@ -370,12 +360,9 @@ class BaseSerializer(AsyncSerializerMixin, serializers.BaseSerializer):
 
 class Serializer(BaseSerializer, serializers.Serializer):
     def get_fields(self) -> Any:
-        # Model serializers use their separate, guarded model-field template.
-        if not isinstance(self, serializers.ModelSerializer):
-            enabled, mode = field_options(self)
-            if enabled and mode == "compiled" and "_declared_fields" not in vars(self):
-                return _declared_copy_plan(type(self))()
-        return super().get_fields()
+        # django-fastdrf's field cache; model serializers use their separate,
+        # guarded model-field template.
+        return _serializer_fields(self, super().get_fields)
 
 
 class ListSerializer(AsyncSerializerMixin, serializers.ListSerializer):
@@ -409,24 +396,13 @@ class ModelSerializer[ModelT: Model](Serializer, serializers.ModelSerializer):
 
     def get_fields(self) -> Any:
         """
-        DRF's fields. With ``AIODRF["CACHE_SERIALIZER_FIELDS"]``, a class
+        DRF's fields. With ``FASTDRF["CACHE_SERIALIZER_FIELDS"]``, a class
         whose fields depend on nothing but the class builds them once, and
         each instance gets a deep copy: the isolation DRF gives declared
         fields (``Field.__deepcopy__`` instantiates the field again from its
         arguments; validators are shared).
         """
-        enabled, mode = field_options(self)
-        if not (enabled and _fields_are_static(self)):
-            return super().get_fields()
-        if self.url_field_name is None:  # what DRF's ``get_fields`` sets
-            self.url_field_name = api_settings.URL_FIELD_NAME  # type: ignore[misc]  # as DRF does
-        if mode == "compiled":
-            return _compiled_field_copy_plan(type(self))()
-        if mode == "clone":
-            return _field_copy_plan(type(self))()
-        return copy.deepcopy(
-            _field_template(type(self)), dict(_template_memo(type(self)))
-        )
+        return _model_serializer_fields(self, super().get_fields)
 
     if TYPE_CHECKING:
         # The model type for type checkers only: at runtime these would be

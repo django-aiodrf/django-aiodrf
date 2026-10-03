@@ -58,8 +58,8 @@ The defaults are the conservative choices:
 AIODRF = {
     "VALIDATION_UNKNOWN": "thread",  # validation code aiodrf cannot classify
     "REPRESENTATION_MODE": "thread",  # serializer.data asked for from async code
-    "SERIALIZER_BACKEND": "drf",
 }
+FASTDRF = {"SERIALIZER_BACKEND": "drf"}  # django-fastdrf, which aiodrf builds on
 ```
 
 `"inline"` for the first two is the project's assertion that the code never

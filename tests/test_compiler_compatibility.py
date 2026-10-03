@@ -2,9 +2,9 @@
 
 import pytest
 from django.test import override_settings
+from fastdrf import compiler, inputs
 
 from aiodrf import serializers
-from aiodrf.contrib import compiler, inputs
 from tests.testapp.models import Edition
 
 
@@ -24,10 +24,11 @@ def test_foreign_key_column_compiles_as_target_scalar(backend, parity, translato
 
     instance = Edition(pk=1, book_id=3, translator_id=translator_id)
     with override_settings(
-        AIODRF={
+        FASTDRF={
             "SERIALIZER_BACKEND": backend,
             "SERIALIZER_BACKEND_PARITY": parity,
-        }
+        },
+        AIODRF={},
     ):
         serializer = Data(instance)
         encoder = compiler.compiled_for(serializer)
@@ -45,7 +46,7 @@ def test_custom_representation_declines_without_building_fields(backend):
         def to_representation(self, instance):
             return {"redacted": True}
 
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": backend}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": backend}, AIODRF={}):
         serializer = Data()
         assert compiler.compiled_for(serializer) is None
         assert "fields" not in vars(serializer)
@@ -62,7 +63,7 @@ def test_misleading_serializer_module_does_not_bypass_override():
         def to_representation(self, instance):
             return {"id": "redacted"}
 
-    with override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"}):
+    with override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}):
         assert compiler.compiled_for(Data(Edition(pk=1))) is None
 
 
@@ -79,9 +80,13 @@ def test_collection_with_custom_child_is_not_static():
     assert not compiler.is_static(Data())
 
 
+INVALID_TEXT = ("\ud800", "x\udfff", "x\x00", "Türkçe\ud800", "😀\udfff", "é\x00")
+
+
 @pytest.mark.parametrize("backend", ["msgspec", "pydantic"])
 @pytest.mark.parametrize(
-    "value", ["plain", "Türkçe", "😀", "\ud800", "x\udfff", "x\x00", " padded "]
+    "value",
+    ["plain", "Türkçe", "😀", " padded ", *INVALID_TEXT],
 )
 def test_string_recognizer_defers_noncanonical_values_to_drf(backend, value):
     from rest_framework.serializers import Serializer as DRFSerializer
@@ -91,8 +96,8 @@ def test_string_recognizer_defers_noncanonical_values_to_drf(backend, value):
 
     serializer = Data(data={"text": value})
     result = inputs.recognize(serializer, backend=backend)
-    assert serializer.is_valid() == (value not in ("\ud800", "x\udfff", "x\x00"))
+    assert serializer.is_valid() == (value not in INVALID_TEXT)
     if result is not inputs.NOT_RECOGNIZED:
         assert result == serializer.validated_data
-    if value in ("\ud800", "x\udfff", "x\x00", " padded "):
+    if value in (*INVALID_TEXT, " padded "):
         assert result is inputs.NOT_RECOGNIZED

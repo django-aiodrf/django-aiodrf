@@ -35,22 +35,36 @@ supported Django releases provide them.
 - Profiling of large responses and of the free-threaded build under contention.
 - Guidance for sizing database connection pools across workers and replicas.
 
-## Separate packages
+## Package ownership
 
-Some contrib modules could become packages of their own if they gain users
-outside aiodrf. None is planned yet; each would first need a stable API, its own
-test matrix and a migration path for existing imports.
+The source packages under `forks/` have separate metadata, test matrices and
+wheel checks. `django-fastdrf` owns the compiled serializer backends, field-copy
+plans, input recognition, schema serializers, converter and auto-prefetch.
+Aiodrf keeps the async DRF integration and pins the compatible fastdrf minor line.
+Installed-wheel tests exercise compiled output, delegated hooks and input errors
+across that boundary. Private fastdrf imports remain a compatibility constraint;
+this extraction does not add a facade over them.
 
-| Component | Possible direction |
+| Component | Owner |
 | --- | --- |
-| Native Redis and Valkey cache backends, cache codecs, page-cache middleware | A general async cache package for Django; its API does not depend on DRF |
-| OpenSearch document writer | A contribution to `django-opensearch-dsl` |
-| WhiteNoise async adapter | A contribution to WhiteNoise |
-| Compiled serializer backends and field-copy plans | A DRF-focused package usable by synchronous and asynchronous code |
-| Pydantic and msgspec serializers and converters | A DRF adapter package, once the schema-native and DRF-compatible parts are separated |
-| Tracing, authentication, filter, permission and schema adapters | Remain in aiodrf: they exist to integrate with aiodrf's hooks |
-| Native ORM backend, query prefetching, concurrent representation | Remain in aiodrf until Django's async ORM APIs are stable |
-| ADRF import compatibility | Remains a migration aid in aiodrf |
+| Native Redis/Valkey backends, codecs, async cache middleware and cache resource context | `aiodrf-async-cache`, using Django's cache contract |
+| ASGI lifespan protocol, typed resource access, signals and lifecycle test helper | `aiodrf-asgi-lifespan`, optional for aiodrf |
+| Request thread reuse, management commands, cache policy classification and async view `cache_page` | aiodrf |
+| OpenSearch document writer | `aiodrf.contrib.opensearch`; no separate package |
+| WhiteNoise adapter | `aiodrf.contrib.whitenoise`; future deprecation, with ServeStatic recommended for new deployments |
+| Tracing, authentication, filters, permissions and schema adapters | aiodrf |
+| Native ORM adapter, batch enrichment, concurrent representation, ADRF compatibility | aiodrf |
+
+The extracted packages do not depend on DRF or aiodrf. Native cache backends
+also work without lifespan; the default page-cache resource selector optionally
+uses `aiodrf-asgi-lifespan`. Keep backend configuration in `CACHES` and the
+resource factory in the top-level `DJANGO_LIFESPAN` setting. Old import paths
+are removed rather than retained as compatibility aliases.
+
+The cache package retains its integer-compatible msgspec encoding. Fastdrf's
+codecs keep their own wire format; extraction does not make stored values
+interchangeable. OpenSearch and WhiteNoise are not release dependencies of
+either new package.
 
 ## Scope
 

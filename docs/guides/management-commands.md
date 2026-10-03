@@ -83,7 +83,7 @@ where Python cannot install signal handlers, no handler is installed.
 
 ## Lifespan resources
 
-A command can use the resources of `AIODRF['LIFESPAN']` (see
+A command can use the resources of `DJANGO_LIFESPAN` (see
 [Managed ASGI resources](lifespan.md)):
 
 ```python
@@ -102,7 +102,7 @@ class Command(AsyncCommand):
 The context manager is entered once, on the command's loop, around the
 handler, and exits after it with the handler's exception, if any. A failure
 while entering it propagates and the handler does not run.
-`get_lifespan_state()` checks the type as `aiodrf.asgi.get_lifespan_state()`
+`get_lifespan_state()` checks the type as `aiodrf_asgi_lifespan.asgi.get_lifespan_state()`
 does, and raises `ImproperlyConfigured` outside the handler, for a command
 without `lifespan = True`, or for another type. `lifespan = True` without
 the setting is `ImproperlyConfigured` too.

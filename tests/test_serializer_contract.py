@@ -8,12 +8,12 @@ import pytest
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.http import QueryDict
 from django.test import override_settings
+from fastdrf import compiler, inputs
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from rest_framework import serializers
 
 from aiodrf import aio
-from aiodrf.contrib import compiler, inputs
 from tests.test_inputs import exact
 
 
@@ -145,7 +145,11 @@ async def test_form_repeated_keys_and_callable_defaults_use_drf(backend, fallbac
     assert reference.is_valid()
     calls.clear()
     with override_settings(
-        AIODRF={"SERIALIZER_BACKEND": backend, "SERIALIZER_BACKEND_FALLBACK": fallback}
+        FASTDRF={
+            "SERIALIZER_BACKEND": backend,
+            "SERIALIZER_BACKEND_FALLBACK": fallback,
+        },
+        AIODRF={},
     ):
         candidate = Input(data=data)
         assert await aio.is_valid(candidate)

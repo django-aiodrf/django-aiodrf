@@ -134,7 +134,34 @@ your application's memory justify it.
   single score.
 - Measure serializer compilation separately from warm execution, and compiled
   serializers separately from those that fall back to DRF. Do not time code
-  under `override_settings()`: changing settings clears aiodrf's caches.
+  under `override_settings()`: changing settings clears aiodrf's and
+  django-fastdrf's caches.
 - CPU pinning, noisy shared machines and background load are part of the
   environment. Profilers show where work happens; repeated uninstrumented runs
   measure it.
+
+## Environment of the published measurements
+
+The timings and instruction counts in this documentation and in the
+changelog were measured on one machine. They compare configurations on that
+machine; other hardware gives other numbers, so measure your own endpoints
+before choosing.
+
+| | |
+| --- | --- |
+| CPU | Intel Core i7-14700F: 8 performance cores (16 threads, up to 5.3–5.4 GHz) and 12 efficiency cores (up to 4.2 GHz), 33 MiB L3 cache |
+| Memory | 128 GB |
+| System | Ubuntu 26.04.1 LTS, Linux 7.0, bare metal |
+| CPU settings | `powersave` frequency governor with turbo enabled, simultaneous multithreading on |
+| Python | CPython 3.14.4 (GCC 15.2), with the GIL |
+| Packages | Django 6.1.1, DRF 3.18.1, msgspec 0.21.1, Pydantic 2.13.5 |
+| Services | PostgreSQL 17 in a local container, reached over loopback |
+
+Single-process measurements ran pinned to performance cores; other services
+(database containers) were running, so expect a few percent of noise. The
+processor and its clock, performance or efficiency cores, the Python build
+(free-threaded CPython is slower for this code), the package versions, the
+payloads, the database and the network all change the results. Ratios carry
+over to similar hardware better than absolute times. Instruction counts
+(Cachegrind) depend less on the machine than times, but still on the Python
+build and the package versions.

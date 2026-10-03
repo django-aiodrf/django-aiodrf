@@ -11,9 +11,9 @@ named databases. Service startup and shutdown are operator actions; nox does not
 stop unrelated services. These local credentials are test fixtures, not production
 configuration. See the [deployment guide](../../docs/guides/deployment-validation.md).
 
-`cache-topologies.yaml` is a separate loopback-only Redis/Valkey Sentinel and
-Cluster project. Follow [the topology test procedure](cache-topologies.md);
-it includes a deliberate failover and must never target production.
+The Redis and Valkey Sentinel and Cluster tests, with their own Compose
+project, belong to
+[aiodrf-async-cache](https://github.com/django-aiodrf/aiodrf-async-cache).
 
 `opensearch.yaml` starts a separate security-disabled local OpenSearch server.
 See [the OpenSearch guide](../../docs/guides/async-nosql.md#opensearch)

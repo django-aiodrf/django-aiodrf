@@ -9,14 +9,17 @@ its lifetime or make access thread-safe.
 
 | State | Lifetime and bound | Synchronization and invalidation |
 | --- | --- | --- |
-| `utils.class_cache` | Weak class keys; no more than 1024 published entries per decorated function between capacity evictions | Hits and deterministic analysis run outside the lock. Publication, capacity eviction and explicit clearing share a lock. A generation check rejects publication after an explicit clear. |
-| Field templates and copy plans | Separate `class_cache` instances in `contrib.builtin.field_cache`; values may own fields, validators and their closures | `AIODRF` and `REST_FRAMEWORK` changes clear the templates and plans. Capacity eviction also releases classes captured by validators. |
+| `utils.class_cache` (django-fastdrf's `class_cache`, with aiodrf's types) | Weak class keys; no more than 1024 published entries per decorated function between capacity evictions | Hits and deterministic analysis run outside the lock. Publication, capacity eviction and explicit clearing share a lock. A generation check rejects publication after an explicit clear. |
+| Field templates and copy plans | Separate `class_cache` instances in `fastdrf._field_cache`; values may own fields, validators and their closures | `FASTDRF` and `REST_FRAMEWORK` changes clear the templates and plans. Capacity eviction also releases classes captured by validators. |
 | Serializer classification | Weak class keys; values contain enums, booleans or sets of attribute names, not serializer instances | Instance mutations bypass class classification. `AIODRF` changes clear cached execution kinds. |
-| Compiled input/output | At most 1024 class buckets per compiler cache, and 32 dynamic variants per class; weak keys additionally release classes without backreferences | Class-bucket publication/eviction and variant publication have separate short locks. Clearing detaches buckets, so in-flight work cannot republish a cleared bucket. `REST_FRAMEWORK` changes invalidate format-dependent results. |
-| Typed schema classes and metadata | 1024 strong entries per `BoundedCache` | Construction and eviction share the cache's lock. Derived serializers, list TypeAdapters and Struct metadata reference their source classes, so weak keys alone would not release them. Backend instances and Pydantic context belong to each serializer, outside these caches. |
-| Inferred relation paths | `_LookupCache` owns weak serializer and model keys, path lists and a publication lock | Hits and inspection run outside the lock. Clearing replaces the table; snapshot identity prevents in-flight work from republishing into the replacement. No serializer instance or request-specific `Prefetch` queryset is stored. |
+| Compiled input/output (`fastdrf.compiler`, `fastdrf.inputs`) | At most 1024 class buckets per compiler cache, and 32 dynamic variants per class; weak keys additionally release classes without backreferences | Class-bucket publication/eviction and variant publication have separate short locks. Clearing detaches buckets, so in-flight work cannot republish a cleared bucket. `REST_FRAMEWORK` changes invalidate format-dependent results. |
+| Typed schema classes and metadata | 1024 strong entries per `BoundedCache` (`fastdrf.typed`; aiodrf's `adapt()` keeps its own instance) | Construction and eviction share the cache's lock. Derived serializers, list TypeAdapters and Struct metadata reference their source classes, so weak keys alone would not release them. Backend instances and Pydantic context belong to each serializer, outside these caches. |
+| Inferred relation paths | `fastdrf.prefetch._LookupCache` owns weak serializer and model keys, path lists and a publication lock | Hits and inspection run outside the lock. Clearing replaces the table; snapshot identity prevents in-flight work from republishing into the replacement. No serializer instance or request-specific `Prefetch` queryset is stored. |
 | Content negotiation | At most 1024 header/format/renderer-description keys; only renderer indexes and media types are stored | Publication and capacity eviction share a lock, including on free-threaded Python. Accept headers longer than 256 characters are not cached. |
-| msgspec deferred conversion | Weak generated-Struct keys; values describe child schemas and attribute names | The compiler finishes constructing metadata before returning an encoder. No request or serializer instance belongs in this table. |
+| msgspec deferred conversion (`fastdrf.msgspec.compiler`) | Weak generated-Struct keys; values describe child schemas and attribute names | The compiler finishes constructing metadata before returning an encoder. No request or serializer instance belongs in this table. |
+
+The rows naming a `fastdrf` module are django-fastdrf's state, which aiodrf
+uses; their rules are kept and tested there.
 
 A weak-key dictionary is not an ephemeron: if its value, or a nested cache key,
 refers back to the class, that class remains reachable. Examples include a
@@ -100,8 +103,8 @@ an editor diagnostic.
 | `aio._common.NEEDS_AWAIT` | Synchronous serializer operations signal that the event-loop half must continue. |
 | `policies._throttle_wait` | `APIView` and the ADRF compatibility adapter obtain a rejected throttle's wait duration in the appropriate execution context. |
 | `utils._transparent` | The OpenTelemetry mixin declares that its instrumentation must not change hook selection. |
-| `contrib.builtin.field_cache._fields_are_static` | `ModelSerializer.get_fields()` and the automatic prefetch inspector decide whether field definitions can be reused. |
-| `contrib.builtin.relations._batch_related_lookups` / `_unbatch` | The validation walker applies an optional instance-local relation adapter and restores it in `finally`. |
+| `fastdrf._field_cache._static_fields` | `ModelSerializer.get_fields()` and the automatic prefetch inspector decide whether field definitions can be reused. |
+| `fastdrf._relations._batch_related_lookups` / `_unbatch` | The validation walker applies an optional instance-local relation adapter and restores it in `finally`. |
 
 Django signal receivers and management-command methods also have callers outside
 their defining file. Import/reference inspection must precede deletion. A Ruff

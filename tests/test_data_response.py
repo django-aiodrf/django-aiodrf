@@ -10,6 +10,8 @@ from django.http import HttpResponse
 from django.template.response import ContentNotRenderedError
 from django.test import override_settings
 from django.urls import path
+from fastdrf.msgspec.renderers import MsgspecJSONRenderer
+from fastdrf.response import DataResponse
 from rest_framework import serializers as drf
 from rest_framework import views as drf_views
 from rest_framework.exceptions import NotFound
@@ -19,8 +21,7 @@ from rest_framework.renderers import (
     StaticHTMLRenderer,
 )
 
-from aiodrf.contrib.msgspec.renderers import MsgspecJSONRenderer
-from aiodrf.response import DataResponse, Response
+from aiodrf.response import Response
 from aiodrf.test import AsyncAPIClient, count_hops
 from aiodrf.views import APIView
 from tests.base import both_transports

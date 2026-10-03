@@ -12,12 +12,12 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from asgiref.sync import iscoroutinefunction
 from django.utils.functional import lazy
+from fastdrf.msgspec.renderers import MsgspecJSONRenderer
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.renderers import JSONRenderer
 from rest_framework.utils.encoders import JSONEncoder as DRFEncoder
 from rest_framework.utils.serializer_helpers import ReturnDict, ReturnList
 
-from aiodrf.contrib.msgspec.renderers import MsgspecJSONRenderer
 from aiodrf.response import Response, _plain_data
 from aiodrf.test import count_hops
 
@@ -143,11 +143,12 @@ def test_large_plain_json_matches_drf_bytes_with_and_without_indentation(size, a
     ],
 )
 def test_the_kept_encoder_renders_drfs_bytes(data, accept, context):
-    from aiodrf.response import _KeptEncoderJSONRenderer
+    # django-fastdrf's JSONRenderer, which aiodrf renders DRF's with.
+    from fastdrf.renderers import JSONRenderer as KeptJSONRenderer
 
-    assert _KeptEncoderJSONRenderer().render(
+    assert KeptJSONRenderer().render(data, accept, context) == JSONRenderer().render(
         data, accept, context
-    ) == JSONRenderer().render(data, accept, context)
+    )
 
 
 @pytest.mark.parametrize(
@@ -169,15 +170,20 @@ def test_the_kept_encoder_renders_drfs_bytes(data, accept, context):
         (None, None),
     ],
 )
-def test_the_kept_msgspec_renderer_renders_its_bytes(data, accept, context):
-    from aiodrf.contrib.msgspec.renderers import MsgspecJSONRenderer
-    from aiodrf.response import _KEPT_ENCODER_RENDERERS
+def test_the_msgspec_renderer_renders_with_itself_and_indents_as_drf(
+    data, accept, context
+):
+    # It skips ``get_indent`` itself: no other instance renders for it.
+    from fastdrf.msgspec.renderers import MsgspecJSONRenderer
+    from fastdrf.renderers import _DATA_RENDERERS
 
-    kept = _KEPT_ENCODER_RENDERERS[MsgspecJSONRenderer]
-    assert type(kept) is not MsgspecJSONRenderer
-    assert kept.render(data, accept, context) == MsgspecJSONRenderer().render(
-        data, accept, context
-    )
+    assert _DATA_RENDERERS[MsgspecJSONRenderer] is None
+    indented = (context or {}).get("indent") is not None or "indent=" in (accept or "")
+    if data is not None and indented:
+        # An indentation, ``indent=0`` included, is DRF's output.
+        assert MsgspecJSONRenderer().render(data, accept, context) == (
+            JSONRenderer().render(data, accept, context)
+        )
 
 
 async def test_built_in_values_render_inline_as_drfs_encoder_renders_them():
@@ -416,13 +422,13 @@ def _drf_rendered(renderer_class, data):
 
 
 def test_the_kept_renderers_follow_their_classes_as_they_are(monkeypatch):
-    from aiodrf.response import _KEPT_ENCODER_RENDERERS
+    from fastdrf.renderers import _DATA_RENDERERS
 
     data = {"price": datetime.timedelta(seconds=90), "text": "ş"}
     # What a project may set in ``AppConfig.ready``, after aiodrf is imported.
     monkeypatch.setattr(JSONRenderer, "encoder_class", SecondsEncoder)
     monkeypatch.setattr(JSONRenderer, "ensure_ascii", True)
-    kept = _KEPT_ENCODER_RENDERERS[JSONRenderer]
+    kept = _DATA_RENDERERS[JSONRenderer]
     assert kept.render(data, "application/json", {}) == _drf_rendered(
         JSONRenderer, data
     )
@@ -434,8 +440,8 @@ def test_the_kept_renderers_follow_their_classes_as_they_are(monkeypatch):
     assert kept.render(data, "application/json", {}) == b"SHOUT"
 
     monkeypatch.setattr(MsgspecJSONRenderer, "render", shouting)
-    kept = _KEPT_ENCODER_RENDERERS[MsgspecJSONRenderer]
-    assert kept.render({"a": 1}, "application/json", {}) == b"SHOUT"
+    assert _DATA_RENDERERS[MsgspecJSONRenderer] is None
+    assert MsgspecJSONRenderer().render({"a": 1}, "application/json", {}) == b"SHOUT"
 
 
 class Tricky:
@@ -477,17 +483,34 @@ class OpinionatedEncoder(DRFEncoder):
 
 
 def test_the_kept_encoders_take_json_dumps_arguments(monkeypatch):
+    from fastdrf.renderers import _DATA_RENDERERS
+
     from aiodrf.contrib import monkeypatches
-    from aiodrf.response import _KEPT_ENCODER_RENDERERS
 
     monkeypatch.setattr(JSONRenderer, "encoder_class", OpinionatedEncoder)
     data = {"b": 1, "a": 2}
     expected = JSONRenderer().render(data, "application/json", {})
     assert expected == b'{"b":1,"a":2}'
-    kept = _KEPT_ENCODER_RENDERERS[JSONRenderer]
+    kept = _DATA_RENDERERS[JSONRenderer]
     assert kept.render(data, "application/json", {}) == expected
     monkeypatches.apply("keep_json_encoders")
     try:
         assert JSONRenderer().render(data, "application/json", {}) == expected
     finally:
         monkeypatches.revert("keep_json_encoders")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "em dash \u2014, ellipsis \u2026, euro \u20ac, arrow \u2192",
+        "\u2028at the start",
+        "at the end\u2029",
+        "mixed \u2014 and \u2028 and \u2026 and \u2029",
+        "Istanbul, Nairobi, INFO, None, Inf",
+    ],
+    ids=repr,
+)
+def test_text_around_the_escaped_separators_is_drfs(text):
+    data = {"text": text, "items": [text, {"nested": text}]}
+    assert MsgspecJSONRenderer().render(data) == JSONRenderer().render(data)

@@ -1,11 +1,11 @@
 """ObjectId serialization and MongoDB-backed CRUD endpoints."""
 
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from django.urls import path
 from django_mongodb_extensions.rest_framework import MongoModelSerializer
 from rest_framework.routers import SimpleRouter
 
 from aiodrf import serializers, viewsets
-from aiodrf.asgi import get_lifespan_state
 from aiodrf.contrib.mongodb.fields import ObjectIdPrimaryKeyRelatedField
 from aiodrf.response import Response
 from aiodrf.views import APIView

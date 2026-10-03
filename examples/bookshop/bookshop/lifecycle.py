@@ -1,4 +1,4 @@
-"""Resources that live as long as the ASGI server (``AIODRF["LIFESPAN"]``)."""
+"""Resources that live as long as the ASGI server (``DJANGO_LIFESPAN``)."""
 
 import json
 from collections.abc import AsyncGenerator

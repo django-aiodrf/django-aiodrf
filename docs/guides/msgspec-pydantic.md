@@ -9,16 +9,18 @@ depends on eligibility, payload size and the selected compatibility mode.
 | Serializer backend (section 1)       | An existing DRF serializer stays the definition. The msgspec and pydantic backends compile output and recognize a conservative input subset when the result is known to equal DRF's; the python backend compiles output only, without a dependency; otherwise DRF does the work. |
 | Schema-first serializers (section 2) | `MsgspecSerializer` / `PydanticSerializer`: a Struct or `BaseModel` is the definition; the library's rules apply, not DRF's.                                                            |
 | JSON codec (section 3)               | `MsgspecJSONRenderer` / `MsgspecJSONParser`, independent of the other two.                                                                                                                |
-| Conversion (section 5)               | `manage.py aiodrf_convert` writes a schema for a serializer, or a serializer for a schema.                                                                                                  |
+| Conversion (section 5)               | `manage.py fastdrf_convert` (django-fastdrf's, with `"fastdrf"` in `INSTALLED_APPS`) writes a schema for a serializer, or a serializer for a schema.                                                                                                  |
 
 Install `django-aiodrf[msgspec]` or `django-aiodrf[pydantic]`. aiodrf imports neither
 unless it is used; selecting a backend that is not installed is reported by
-`manage.py check` (`aiodrf.E004`).
+`manage.py check` (`fastdrf.E004`). The backends are
+[django-fastdrf](https://github.com/ctolon/django-fastdrf)'s, which aiodrf
+builds on: their settings are in its `FASTDRF` dictionary.
 
 ## 1. The serializer backend
 
 ```python
-AIODRF = {
+FASTDRF = {
     "SERIALIZER_BACKEND": "msgspec",  # "drf" (default), "msgspec", "pydantic", "python"
     "SERIALIZER_BACKEND_PARITY": "strict",  # or "fast", for output
     "SERIALIZER_BACKEND_FALLBACK": "drf",  # or "error"
@@ -146,7 +148,7 @@ Django's. A model field class of the project's or a third party's, an attribute
 the model defines over a field, or such a manager keeps the serializer on DRF.
 The second read repeats at most Django's query of a lazy relation. `"fast"`
 parity does not read again: the backend's error (`msgspec.ValidationError`,
-`pydantic.ValidationError`, `aiodrf.contrib.compiler.UnreadableValue`) is raised where DRF outputs `None`, converts the
+`pydantic.ValidationError`, `fastdrf.compiler.UnreadableValue`) is raised where DRF outputs `None`, converts the
 value or skips a missing attribute.
 
 Everything else keeps the serializer on DRF: `SerializerMethodField`, a nested
@@ -166,6 +168,22 @@ fields may read the same attribute or relation: it is read once and converted
 for each of them. `"fast"` additionally compiles `DecimalField`s that output
 `Decimal` objects (as `str(value)`, not quantized), fields of a plain
 `Serializer` and JSON fields; its output can differ from DRF's for these.
+
+Fields of other packages and of the project join the compiled output when
+they are registered with django-fastdrf's `fastdrf.registry`. Its
+applications `fastdrf.contrib.phonenumber`, `fastdrf.contrib.countries` and
+`fastdrf.contrib.money` do so for django-phonenumber-field, django-countries
+and django-money; add them to `INSTALLED_APPS` with aiodrf's
+([fields of other packages](https://github.com/ctolon/django-fastdrf/blob/main/docs/extending.md)).
+`fastdrf.registry.register_msgspec_type()` teaches the msgspec schema
+serializers, bare schemas of views included, a type of the project's.
+With `FASTDRF["DELEGATE_FIELDS"] = True` (or `Meta.delegate_fields`), the
+fields a backend cannot compile, `SerializerMethodField` among them, run
+their own code inside the compiled output; in aiodrf's views that output is
+produced off the event loop, where DRF's representation would run
+([delegated fields](https://github.com/ctolon/django-fastdrf/blob/main/docs/serializers.md#delegated-fields)).
+`fastdrf.testing.assert_compiled_as_drf()` checks a serializer's compiled
+output against DRF's in tests.
 
 Which compiled class a serializer uses is found in one of two ways:
 
@@ -215,7 +233,9 @@ read makes DRF represent that source. Input is validated by DRF, as without a
 backend.
 
 On a `ModelViewSet` of a five-field model, one request of `list` (20 rows) and
-`retrieve` took 3.55 M and 2.05 M instructions with it, against 5.57 M and
+`retrieve` took (Cachegrind, on the machine described in
+[performance](performance.md#environment-of-the-published-measurements))
+3.55 M and 2.05 M instructions with it, against 5.57 M and
 3.12 M with DRF's serializer and 3.40 M and 2.04 M with msgspec, the field
 cache on. Its readers are as fast as msgspec's for one object and within
 about 10 % on lists; where msgspec is not wanted it gives the compiled
@@ -240,7 +260,7 @@ falls back to DRF validation on its own.
 
 ### Input
 
-`aiodrf/contrib/inputs.py` compiles a *recognizer*, not a second validator.
+`fastdrf/inputs.py` compiles a *recognizer*, not a second validator.
 It accepts only input for which DRF would return exactly the same
 `validated_data`: a JSON `dict` (or `list` for `many=True`) whose values
 already have the types DRF converts to, strings already trimmed, numbers
@@ -336,7 +356,7 @@ is assigned to one of its fields). Codes include
 backend is missing: input is not inspected, output only for what keeps it on
 DRF) and the conservative `unsupported_field` category; consumers should
 branch on the code, not parse the reason.
-`compiler.report_details()` and `inputs.report_input_details()` return the
+`fastdrf.compiler.report_details()` and `fastdrf.inputs.report_input_details()` return the
 same structured decision for one serializer instance; the older `report()`
 and `report_input()` return a reason or `None`.
 
@@ -576,7 +596,7 @@ guarantees for third-party packages.
 ### Allowed serializer backends
 
 ```python
-AIODRF = {"ALLOWED_SERIALIZER_BACKENDS": ["drf", "pydantic"]}  # default: all three
+FASTDRF = {"ALLOWED_SERIALIZER_BACKENDS": ["drf", "pydantic"]}  # default: all three
 ```
 
 `"drf"` is a DRF serializer (compiled by `SERIALIZER_BACKEND` or not),
@@ -631,7 +651,8 @@ when migrating a model that declares a `serialization_alias`.
 
 ### OpenAPI
 
-With drf-spectacular installed, request bodies are documented from the input
+With drf-spectacular installed, django-fastdrf's extension (loaded by
+aiodrf's application) documents request bodies from the input
 schema (an explicit `Meta.partial_schema` for PATCH) and responses from the
 output schema. Components are identified by their shape, so a pydantic model
 that validates and serializes differently (a `serialization_alias`) is
@@ -646,6 +667,68 @@ generic model's component is named as pydantic names it (`Page_int_`).
 See the [ecosystem guide](ecosystem.md#aiodrf-schema-extensions).
 
 ## 3. JSON renderer and parser
+
+JSON transport is independent of serializer selection. Installing an extra does
+not change DRF's defaults, and selecting a parser/renderer does not change
+`FASTDRF["SERIALIZER_BACKEND"]`. Select django-fastdrf's classes directly:
+
+| Install | Parser | Renderer |
+| --- | --- | --- |
+| `django-aiodrf[msgspec]` | `fastdrf.msgspec.parsers.MsgspecJSONParser` | `fastdrf.msgspec.renderers.MsgspecJSONRenderer` |
+| `django-aiodrf[pydantic]` | `fastdrf.pydantic.parsers.PydanticJSONParser` | `fastdrf.pydantic.renderers.PydanticJSONRenderer` |
+| `django-aiodrf[orjson]` | `fastdrf.orjson.parsers.ORJSONParser` | `fastdrf.orjson.renderers.ORJSONRenderer` |
+
+For example, to use pydantic-core for JSON transport throughout the project:
+
+```python
+REST_FRAMEWORK = {
+    "DEFAULT_PARSER_CLASSES": ["fastdrf.pydantic.parsers.PydanticJSONParser"],
+    "DEFAULT_RENDERER_CLASSES": ["fastdrf.pydantic.renderers.PydanticJSONRenderer"],
+}
+```
+
+Or select orjson for one async view:
+
+```python
+from fastdrf.orjson.parsers import ORJSONParser
+from fastdrf.orjson.renderers import ORJSONRenderer
+from aiodrf.response import Response
+from aiodrf.views import APIView
+
+
+class Echo(APIView):
+    parser_classes = [ORJSONParser]
+    renderer_classes = [ORJSONRenderer]
+
+    async def post(self, request):
+        return Response(await request.adata())
+```
+
+Keep other parser/renderer classes in the lists when the endpoint also accepts
+forms, uploads or serves the browsable API. Both pairs work with `Response`,
+`fastdrf.response.DataResponse`, and streaming responses given
+`renderer=...`. Plain response data can render on the event loop; lazy values,
+custom renderer subclasses and instance callbacks retain the worker boundary.
+These parsers, like fastdrf's msgspec parser, parse in the request worker.
+Malformed JSON becomes DRF's `ParseError` and a 400 response. Schema validation
+still belongs to the serializer.
+
+Native output is not byte-for-byte DRF JSON. Pydantic renders decimals as
+strings, bytes as URL-safe base64 and timedeltas as ISO 8601 durations; nonfinite
+floats become `null`. Orjson uses its native JSON format and DRF's encoder
+fallback for unsupported values (for example decimals become floats), and
+rejects nonfinite JSON input even if DRF's `STRICT_JSON` is disabled.
+Indentation and custom encoder settings select DRF's rendering path before
+encoding starts; a failed native encoding is not retried.
+
+For msgspec:
+
+```python
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": ["fastdrf.msgspec.renderers.MsgspecJSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["fastdrf.msgspec.parsers.MsgspecJSONParser"],
+}
+```
 
 `MsgspecJSONRenderer` renders on the event loop after the payload check
 DRF's `JSONRenderer` gets (implementation guide section 5): data made of plain
@@ -692,14 +775,30 @@ be identical, in `"fast"` they differ where section 1 says.
 
 ## 5. Converting between serializers and schemas
 
-`manage.py aiodrf_convert` writes source code for the other side, to start a
-migration or to keep a schema next to a serializer:
+django-fastdrf's `manage.py fastdrf_convert` writes source code for the other
+side, to start a migration or to keep a schema next to a serializer. The
+command is django-fastdrf's: add its application to use it.
+
+```python
+INSTALLED_APPS = [
+    # ...
+    "rest_framework",
+    "aiodrf",
+    "fastdrf",  # manage.py fastdrf_convert
+]
+```
 
 ```console
-python manage.py aiodrf_convert app.serializers.BookSerializer --to pydantic
-python manage.py aiodrf_convert app.serializers.BookSerializer --to msgspec --output app/schemas.py
-python manage.py aiodrf_convert app.schemas.BookIn --to drf --name Book
+python manage.py fastdrf_convert app.serializers.BookSerializer --to pydantic
+python manage.py fastdrf_convert app.serializers.BookSerializer --to msgspec --output app/schemas.py
+python manage.py fastdrf_convert app.schemas.BookIn --to drf --name Book
 ```
+
+aiodrf's serializers convert like DRF's: their bases are registered with
+django-fastdrf, so only the project's own validation hooks are reported as
+not converted. The application also adds `manage.py
+fastdrf_inspect_serializers`, which reports for django-fastdrf's synchronous
+views; for aiodrf's views use `manage.py aiodrf_inspect_serializers`.
 
 A serializer is instantiated without a request and read from its `fields`;
 a pydantic model or msgspec Struct is read from its class. Nested
@@ -714,7 +813,7 @@ lengths, bounds, patterns, choices, `allow_null`, constant defaults,
 `required=False` (`T | None = None` for pydantic, with a comment, and
 `msgspec.UNSET` for msgspec), wire names (`source=`). Everything else is
 kept visible, not guessed: the field becomes `Any` (or
-`serializers.JSONField()`) with a `# TODO(aiodrf_convert): ...` comment.
+`serializers.JSONField()`) with a `# TODO(convert): ...` comment.
 The same comment lists `validate_<field>()`, `validate()`, every validator
 a field or serializer carries beyond what its options build (explicit
 `validators=`, a model's validators, the unique-together validators

@@ -6,10 +6,11 @@ from unittest.mock import patch
 
 import pytest
 from django.test import override_settings
+from fastdrf import _field_cache
+from fastdrf._field_copy import compile_fields
 from rest_framework import serializers as drf
 
 from aiodrf import serializers
-from aiodrf.contrib.builtin.field_copy import compile_fields
 from tests.test_threads import race
 from tests.testapp.models import Author
 
@@ -126,11 +127,11 @@ def test_view_and_serializer_selection_never_mutates_shared_settings():
     view = SimpleNamespace(
         serializer_field_cache=True, serializer_field_copy_mode="compiled"
     )
-    with override_settings(AIODRF={}):
+    with override_settings(AIODRF={}, FASTDRF={}):
         chosen = Input(context={"view": view})
         with patch(
-            "aiodrf.serializers._compiled_field_copy_plan",
-            wraps=serializers._compiled_field_copy_plan,
+            "fastdrf._field_cache._compiled_field_copy_plan",
+            wraps=_field_cache._compiled_field_copy_plan,
         ) as plan:
             assert list(chosen.fields) == ["name"]
             assert plan.call_count == 1
@@ -146,7 +147,7 @@ def test_nested_meta_can_disable_inherited_optimization():
     class Container(Parent):
         child = Local()
 
-    from aiodrf.contrib.builtin.field_options import field_options
+    from fastdrf._field_options import field_options
 
     instance = Container(context={"marker": object()})
     assert field_options(instance.fields["child"])[0] is False
@@ -162,7 +163,7 @@ def test_compiled_plan_is_safe_to_share_between_request_threads():
 
 @pytest.mark.aiodrf_settings(CACHE_SERIALIZER_FIELDS=False, FIELD_COPY_MODE="deepcopy")
 def test_option_discovery_does_not_execute_custom_context_properties():
-    from aiodrf.contrib.builtin.field_options import field_options
+    from fastdrf._field_options import field_options
 
     class Custom(serializers.Serializer):
         @property
@@ -225,7 +226,7 @@ def test_a_bound_childs_arguments_keep_their_aliases():
 def test_a_dict_subclass_context_keeps_the_views_selection():
     from collections import OrderedDict
 
-    from aiodrf.contrib.builtin.field_options import field_options
+    from fastdrf._field_options import field_options
 
     class Input(serializers.ModelSerializer):
         class Meta:
@@ -239,7 +240,7 @@ def test_a_dict_subclass_context_keeps_the_views_selection():
     view = SimpleNamespace(
         serializer_field_cache=True, serializer_field_copy_mode="compiled"
     )
-    with override_settings(AIODRF={}):
+    with override_settings(AIODRF={}, FASTDRF={}):
         for context in (OrderedDict(view=view), Context(view=view)):
             assert field_options(Input(context=context)) == (True, "compiled")
 
@@ -304,7 +305,7 @@ def _views():
 def test_a_views_option_is_read_as_getattr_static_reads_it(view):
     from inspect import getattr_static
 
-    from aiodrf.contrib.builtin.field_options import _view_option
+    from fastdrf._field_options import _view_option
 
     expected = getattr_static(view, "serializer_field_cache", None)
     assert _view_option(view, "serializer_field_cache") is expected

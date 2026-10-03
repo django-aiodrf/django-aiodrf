@@ -169,7 +169,7 @@ async def test_to_many_writes_run_the_callbacks_after_the_commit(client):
     try:
         for atomic_save in (True, False):
             note = await orm(Note.objects.create, text="n")
-            with override_settings(AIODRF={"ATOMIC_SAVE": atomic_save}):
+            with override_settings(AIODRF={"ATOMIC_SAVE": atomic_save}, FASTDRF={}):
                 response = await client(
                     "patch", f"/notes/{note.pk}/", {"labels": [label.pk]}, format="json"
                 )

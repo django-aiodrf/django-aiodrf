@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from django.conf import settings
 from django.db import connection
 from django.http import JsonResponse
@@ -12,7 +13,6 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response as DRFResponse
 from rest_framework.views import APIView as DRFAPIView
 
-from aiodrf.asgi import get_lifespan_state
 from aiodrf.generics import ListAPIView, RetrieveAPIView
 from aiodrf.response import EventStreamResponse, Response
 from aiodrf.utils import run_sync
@@ -231,6 +231,6 @@ class ThreadedLargeJSON(LargeJSON):
 
 
 class FastLargeJSON(LargeJSON):
-    from aiodrf.contrib.msgspec.renderers import MsgspecJSONRenderer
+    from fastdrf.msgspec.renderers import MsgspecJSONRenderer
 
     renderer_classes = [MsgspecJSONRenderer]

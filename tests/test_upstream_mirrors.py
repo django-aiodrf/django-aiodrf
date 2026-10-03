@@ -126,28 +126,12 @@ MIRRORS = {
         {"3.16": "9509a380ec38", "3.17": "9509a380ec38", "3.18": "9509a380ec38"},
     ),
     "rest_framework.fields:ListField.to_internal_value": (
-        ["aiodrf.aio._validate:_acollection", "aiodrf.contrib.inputs:_collection"],
+        ["aiodrf.aio._validate:_acollection"],
         {"3.16": "a7d25fd2f99a", "3.17": "a7d25fd2f99a", "3.18": "a7d25fd2f99a"},
     ),
     "rest_framework.fields:DictField.to_internal_value": (
-        ["aiodrf.aio._validate:_acollection", "aiodrf.contrib.inputs:_collection"],
+        ["aiodrf.aio._validate:_acollection"],
         {"3.16": "5c526896b19a", "3.17": "5c526896b19a", "3.18": "ea71480603de"},
-    ),
-    "rest_framework.fields:FloatField.to_internal_value": (
-        ["aiodrf.contrib.inputs:_float"],
-        {"3.16": "ff1f2badd7d5", "3.17": "ff1f2badd7d5", "3.18": "2d71dbbf2651"},
-    ),
-    "rest_framework.fields:BooleanField.to_internal_value": (
-        ["aiodrf.contrib.inputs:_boolean"],
-        {"3.16": "de97e3ea3b84", "3.17": "de97e3ea3b84", "3.18": "de97e3ea3b84"},
-    ),
-    "rest_framework.fields:IntegerField.to_internal_value": (
-        ["aiodrf.contrib.inputs:_integer"],
-        {"3.16": "a4b7f1931b06", "3.17": "a4b7f1931b06", "3.18": "a4b7f1931b06"},
-    ),
-    "rest_framework.fields:CharField.to_internal_value": (
-        ["aiodrf.contrib.inputs:_char"],
-        {"3.16": "c1108c4d5e8a", "3.17": "c1108c4d5e8a", "3.18": "c1108c4d5e8a"},
     ),
     "rest_framework.mixins:CreateModelMixin.create": (
         ["aiodrf.mixins:CreateModelMixin._create"],
@@ -173,10 +157,6 @@ MIRRORS = {
         ["aiodrf.generics:GenericAPIView.aget_object"],
         {"3.16": "dc63d7cad36c", "3.17": "dc63d7cad36c", "3.18": "dc63d7cad36c"},
     ),
-    "rest_framework.renderers:JSONRenderer.render": (
-        ["aiodrf.response:_KeptEncoderJSONRenderer.render"],
-        {"3.16": "750e44060b13", "3.17": "750e44060b13", "3.18": "750e44060b13"},
-    ),
     "rest_framework.permissions:DjangoModelPermissions.has_permission": (
         ["aiodrf.contrib.permissions:DjangoModelPermissions.ahas_permission"],
         {"3.16": "4a79e810d372", "3.17": "4a79e810d372", "3.18": "4a79e810d372"},
@@ -184,75 +164,6 @@ MIRRORS = {
     "rest_framework.test:APIClient.logout": (
         ["aiodrf.test:AsyncAPIClient.logout", "aiodrf.test:AsyncAPIClient.alogout"],
         {"3.16": "71491b251971", "3.17": "71491b251971", "3.18": "71491b251971"},
-    ),
-    # The compiled output repeats DRF's representation of these fields.
-    "rest_framework.fields:get_attribute": (
-        [
-            "aiodrf.contrib.compiler:_through_relations",
-            "aiodrf.contrib.compiler:_instance_value",
-        ],
-        {"3.16": "adb941eab229", "3.17": "b021cf5adaaf", "3.18": "b021cf5adaaf"},
-    ),
-    "rest_framework.fields:DateTimeField.to_representation": (
-        ["aiodrf.contrib.compiler:_datetime_representation"],
-        {"3.16": "1646d1eff057", "3.17": "1646d1eff057", "3.18": "1646d1eff057"},
-    ),
-    "rest_framework.fields:DateTimeField.enforce_timezone": (
-        ["aiodrf.contrib.compiler:_datetime_representation"],
-        {"3.16": "62e62bd3d0e2", "3.17": "62e62bd3d0e2", "3.18": "cf3e9dfbe8dc"},
-    ),
-    "rest_framework.fields:DecimalField.to_representation": (
-        ["aiodrf.contrib.compiler:_decimal_representation"],
-        {"3.16": "14843f3469f4", "3.17": "91276f4f7fb6", "3.18": "91276f4f7fb6"},
-    ),
-    "rest_framework.fields:DecimalField.quantize": (
-        [
-            "aiodrf.contrib.compiler:_decimal_representation",
-            "aiodrf.contrib.compiler:_Call.context",
-        ],
-        {"3.16": "b55afa91a09c", "3.17": "b55afa91a09c", "3.18": "b55afa91a09c"},
-    ),
-    "rest_framework.fields:FileField.to_representation": (
-        ["aiodrf.contrib.compiler:_file"],
-        {"3.16": "e7035e73eaf2", "3.17": "e7035e73eaf2", "3.18": "e7035e73eaf2"},
-    ),
-    "rest_framework.fields:ModelField.to_representation": (
-        [
-            "aiodrf.contrib.compiler:_model_field_output",
-            "aiodrf.contrib.compiler:_model_field_value",
-        ],
-        {"3.16": "59ccd059e140", "3.17": "59ccd059e140", "3.18": "59ccd059e140"},
-    ),
-    "rest_framework.relations:ManyRelatedField.get_attribute": (
-        ["aiodrf.contrib.compiler:_primary_keys"],
-        {"3.16": "69fcbfbae759", "3.17": "69fcbfbae759", "3.18": "69fcbfbae759"},
-    ),
-    "rest_framework.relations:ManyRelatedField.to_representation": (
-        [
-            "aiodrf.contrib.compiler:_primary_key_list",
-            "aiodrf.contrib.compiler:_key_list",
-            "aiodrf.contrib.compiler:_slug_list",
-        ],
-        {"3.16": "ba28a19f53bb", "3.17": "ba28a19f53bb", "3.18": "ba28a19f53bb"},
-    ),
-    "rest_framework.relations:PrimaryKeyRelatedField.to_representation": (
-        [
-            "aiodrf.contrib.compiler:_primary_key",
-            "aiodrf.contrib.compiler:_key_representation",
-        ],
-        {"3.16": "462a787299ef", "3.17": "462a787299ef", "3.18": "462a787299ef"},
-    ),
-    "rest_framework.relations:SlugRelatedField.to_representation": (
-        ["aiodrf.contrib.compiler:_slug", "aiodrf.contrib.compiler:_slug_column"],
-        {"3.16": "f9108bbc8286", "3.17": "f9108bbc8286", "3.18": "f9108bbc8286"},
-    ),
-    "rest_framework.relations:RelatedField.get_attribute": (
-        ["aiodrf.contrib.compiler:_slug", "aiodrf.contrib.compiler:_primary_key"],
-        {"3.16": "26f98f36fbfd", "3.17": "26f98f36fbfd", "3.18": "26f98f36fbfd"},
-    ),
-    "rest_framework.serializers:Serializer._read_only_defaults": (
-        ["aiodrf.contrib.inputs:_dynamic_read_only_default"],
-        {"3.16": "e6c835e0e319", "3.17": "e6c835e0e319", "3.18": "e6c835e0e319"},
     ),
 }
 

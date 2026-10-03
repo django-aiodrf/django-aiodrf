@@ -2,7 +2,7 @@
 name = "aiodrf-example-django-builtin"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["django-aiodrf", "django>=6.1,<6.2", "uvicorn>=0.30", "httpx>=0.27", "redis>=5", "django-redis>=5", "pymemcache>=4"]
+dependencies = ["aiodrf-asgi-lifespan>=0.1,<0.2", "django-aiodrf", "django>=6.1,<6.2", "uvicorn>=0.30", "httpx>=0.27", "redis>=5", "django-redis>=5", "pymemcache>=4"]
 
 [project.optional-dependencies]
 pylibmc = ["pylibmc>=1.6.3"]
@@ -11,6 +11,7 @@ pylibmc = ["pylibmc>=1.6.3"]
 package = false
 
 [tool.uv.sources]
+aiodrf-asgi-lifespan = { path = "../../forks/aiodrf-asgi-lifespan", editable = true }
 django-aiodrf = { path = "../..", editable = true }
 
 [dependency-groups]

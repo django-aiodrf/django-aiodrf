@@ -1,12 +1,11 @@
 """Use a native page cache owned by the project's composite lifespan resource."""
 
-from django.core.exceptions import ImproperlyConfigured
-
-from aiodrf.asgi import get_lifespan_state
-from aiodrf.contrib.async_cache import (
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
+from aiodrf_async_cache.middleware import (
     AsyncFetchFromCacheMiddleware,
     AsyncUpdateCacheMiddleware,
 )
+from django.core.exceptions import ImproperlyConfigured
 
 from .lifecycle import Resources
 

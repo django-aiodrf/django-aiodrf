@@ -134,7 +134,7 @@ property access safe on the event loop.
 sync and async rendering paths. Known in-memory payloads may render inline;
 unknown callbacks and lazy data retain worker execution.
 
-`aiodrf.response.DataResponse(data=None, status=None, headers=None,
+`fastdrf.response.DataResponse(data=None, status=None, headers=None,
 content_type=None)` is an opt-in alternative: Django's `HttpResponse` whose
 content the view renders from `data` when it finalizes it. With DRF's
 `JSONRenderer` or `MsgspecJSONRenderer` accepted, status, content and headers
@@ -165,13 +165,13 @@ remain relevant; do not share private responses across principals.
 ## Application lifecycle and tests
 
 `aiodrf.asgi.get_asgi_application(lifespan=...)` wraps Django's ASGI application
-with an optional asynchronous context manager. `AIODRF["LIFESPAN"]` may name
+with an optional asynchronous context manager. `DJANGO_LIFESPAN` may name
 its dotted path. `get_lifespan_state(request, ExpectedType)` accesses typed
 worker-local state. See [lifespan](guides/lifespan.md).
 
 `aiodrf.test.AsyncAPIClient` and `AsyncAPIRequestFactory` retain DRF-style
 request encoding over Django's async clients. `count_hops()` observes aiodrf's
-own adapters. `async with aiodrf.test.lifespan() as state:` runs the lifespan
+own adapters. `async with aiodrf_asgi_lifespan.testing.lifespan() as state:` runs the lifespan
 around a test, and `AsyncAPIClient(lifespan=state)` gives every request a copy
 of its state. Use full ASGI tests for disconnect and streaming ownership;
 client tests alone do not exercise a deployed server. See [application testing](guides/testing.md).
@@ -180,30 +180,29 @@ client tests alone do not exercise a deployed server. See [application testing](
 
 | Namespace | Contract / guide |
 | --- | --- |
-| `contrib.builtin.field_copy`, `field_cache`, `field_options`, `relations` | Internal opt-in implementation; configure via serializer/view/settings, not helper calls |
-| `contrib.builtin.prefetch` | `auto_prefetch`, `related_lookups`, `forget_lookups`; inferred query loading |
+| `fastdrf.prefetch` | `auto_prefetch`, `related_lookups`, `forget_lookups`; inferred query loading (django-fastdrf's) |
 | `contrib.builtin.list_prefetch` | `PrefetchListSerializer.aprefetch(instances)`; [batch enrichment](guides/prefetch.md) |
 | `contrib.builtin.concurrent` | [Bounded concurrent representation](guides/concurrent-serialization.md) |
 | `contrib.list_serializers` | `ListSerializer`, `SchemaListSerializer` with weakly bound children; [memory](guides/performance.md#memory-and-garbage-collection) |
 | `contrib.monkeypatches` | `apply`, `revert`, `applied`; opt-in DRF patches named in `AIODRF["MONKEYPATCHES"]` |
-| `contrib.msgspec`, `contrib.pydantic`, `contrib.compiler` | Explicit schemas and DRF compilation; [backend contracts](guides/msgspec-pydantic.md) |
-| `contrib.builtin.output` | The `"python"` serializer backend, selected with `AIODRF["SERIALIZER_BACKEND"]`; [the python backend](guides/msgspec-pydantic.md#the-python-backend) |
+| `contrib.msgspec`, `contrib.pydantic` | Explicit schemas on aiodrf's async serializers; [backend contracts](guides/msgspec-pydantic.md) |
+| django-fastdrf | The compiled backends (`msgspec`, `pydantic`, `"python"`), input recognition, field caching and copying, related lookups and the converter, configured with `FASTDRF`; [backend contracts](guides/msgspec-pydantic.md) |
 | `contrib.spectacular` | Schema extensions and QUERY exclusion hook |
 | `contrib.whitenoise` | `whitenoise_middleware`; [static file limitations](guides/static-files.md) |
 | Django Tasks / `tasks` extra | [Django's task API and the Django 5 backport](guides/tasks.md); no replacement task module is installed |
-| `contrib.valkey.LifespanConnectionFactory` | Optional public connection-factory subclass for a lifespan-owned native cache; [configuration](guides/async-cache.md) |
-| `contrib.redis.AsyncRedisCache`, `contrib.valkey.AsyncValkeyCache` | Async-only Django cache backends with awaited callbacks, standalone/Sentinel/Cluster clients and explicit lifespan ownership |
-| `contrib.cache_codecs` | `MsgspecCodec`, `PydanticCodec`; optional typed value formats, not page-response serializers |
+| `aiodrf_async_cache.django_valkey.LifespanConnectionFactory` | Optional public connection-factory subclass for a lifespan-owned native cache; [configuration](guides/async-cache.md) |
+| `aiodrf_async_cache.redis.AsyncRedisCache`, `aiodrf_async_cache.valkey.AsyncValkeyCache` | Async-only Django cache backends with awaited callbacks, standalone/Sentinel/Cluster clients and explicit lifespan ownership |
+| `aiodrf_async_cache.codecs` | `MsgspecCodec` (`PydanticCodec` is `fastdrf.codecs.PydanticCodec`); optional typed value formats, not page-response serializers |
 | `contrib.opensearch.AsyncDocumentWriter` | `aindex`, `adelete`, `abulk`; Django document preparation with native OpenSearch HTTP and caller-owned client |
-| `contrib.async_cache` | `cache_lifespan`, `AsyncCache` protocol, `AsyncCacheMiddleware`, `AsyncUpdateCacheMiddleware`, `AsyncFetchFromCacheMiddleware`; [native cache integration](guides/async-cache.md) |
+| `aiodrf_async_cache.middleware` | `cache_lifespan`, `AsyncCache` protocol, `AsyncCacheMiddleware`, `AsyncUpdateCacheMiddleware`, `AsyncFetchFromCacheMiddleware`; [native cache integration](guides/async-cache.md) |
 | `contrib.async_backend` | [Opt-in native PostgreSQL adapter](guides/async-backend.md) |
 
 Authentication, storage, telemetry and other tested packages are indexed in the
 [ecosystem guide](guides/ecosystem.md) and [example inventory](../examples/ECOSYSTEM.md).
 Dependency configuration and complete vendor APIs are linked in
 [contrib dependencies](reference/contrib-dependencies.md).
-The old `aiodrf.prefetch`, `aiodrf.contrib.prefetch` and `aiodrf.contrib.concurrent`
-imports remain compatibility exports; implementations live in `contrib.builtin`.
+The old `aiodrf.contrib.prefetch` and `aiodrf.contrib.concurrent` imports remain
+compatibility exports; implementations live in `contrib.builtin`.
 
 All `AIODRF` settings, defaults and accepted values are listed in the
 [settings reference](reference/settings.md). Read the

@@ -44,6 +44,9 @@ missing files, rejects parent paths and passes API requests on to Django.
 
 ## WhiteNoise compatibility
 
+The aiodrf adapter remains in this package and is planned for future deprecation.
+Use ServeStatic for new application-served static-file deployments.
+
 [WhiteNoise issue 251](https://github.com/evansd/whitenoise/issues/251) discusses
 the WSGI/ASGI mismatch. The version in the compatibility environment returns a
 synchronous file iterator. Django's ASGI handler must consume that iterator

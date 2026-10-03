@@ -734,7 +734,7 @@ class _MixedProjectTests:
         names = [author.name async for author in Author.objects.order_by("pk")]
         assert names == ["Ursula", "drf"]
         with (
-            override_settings(AIODRF={"ATOMIC_SAVE": False}),
+            override_settings(AIODRF={"ATOMIC_SAVE": False}, FASTDRF={}),
             pytest.raises(RuntimeError, match="after the insert"),
         ):
             await self.api("post", "/drf/aiodrf-failing-create/", data={"name": "off"})
@@ -742,10 +742,10 @@ class _MixedProjectTests:
 
     @urls
     async def test_the_serializer_backend_applies_to_aiodrf_views_only(self):
-        from aiodrf.contrib import compiler
+        from fastdrf import compiler
 
         with (
-            override_settings(AIODRF={"SERIALIZER_BACKEND": "msgspec"}),
+            override_settings(FASTDRF={"SERIALIZER_BACKEND": "msgspec"}, AIODRF={}),
             mock.patch.object(
                 compiler, "compiled_for", wraps=compiler.compiled_for
             ) as compiled,

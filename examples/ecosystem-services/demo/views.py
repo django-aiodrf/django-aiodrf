@@ -3,6 +3,7 @@
 from functools import partial
 from uuid import uuid4
 
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -13,7 +14,6 @@ from rest_framework import serializers
 from rest_framework.exceptions import APIException
 
 from aiodrf import aio
-from aiodrf.asgi import get_lifespan_state
 from aiodrf.response import Response
 from aiodrf.utils import run_sync
 from aiodrf.views import APIView

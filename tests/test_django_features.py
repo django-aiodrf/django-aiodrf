@@ -482,7 +482,7 @@ async def test_model_receivers_of_a_generic_create_run_in_its_save_hop():
 
 
 @pytest.mark.skipif(DJANGO_VERSION < (6, 1), reason="Fetch modes need Django 6.1")
-@override_settings(ROOT_URLCONF=__name__, AIODRF={"FETCH_MODE": "raise"})
+@override_settings(ROOT_URLCONF=__name__, FASTDRF={"FETCH_MODE": "raise"}, AIODRF={})
 class FetchModeResponseTests(TestCase):
     @classmethod
     def setUpTestData(cls):

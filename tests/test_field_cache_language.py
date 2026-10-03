@@ -26,7 +26,7 @@ class Reference(drf.ModelSerializer):
 @pytest.mark.parametrize("languages", [("en", "fr"), ("fr", "en")])
 def test_cached_field_copies_do_not_retain_the_first_requests_language(languages):
     copies = []
-    with override_settings(AIODRF={"CACHE_SERIALIZER_FIELDS": True}):
+    with override_settings(FASTDRF={"CACHE_SERIALIZER_FIELDS": True}, AIODRF={}):
         for language in languages:
             with translation.override(language):
                 actual = Cached(data={"name": "x"})
@@ -78,7 +78,7 @@ def test_unique_messages_follow_the_active_language(mode, cached, reference, dat
     Tag.objects.create(name="taken")
     Seat.objects.create(number=1, open=True)
     settings = {"CACHE_SERIALIZER_FIELDS": True, "FIELD_COPY_MODE": mode}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         with translation.override("fr"):
             cached().fields  # noqa: B018 -- builds the template
         for language in ("en", "fr"):
@@ -138,7 +138,7 @@ class ReferenceDeclared(drf.ModelSerializer):
 def test_a_unique_message_the_project_gave_is_kept(mode, cached, reference):
     Tag.objects.create(name="taken")
     settings = {"CACHE_SERIALIZER_FIELDS": True, "FIELD_COPY_MODE": mode}
-    with override_settings(AIODRF=settings):
+    with override_settings(FASTDRF=settings, AIODRF={}):
         cached().fields  # noqa: B018 -- builds the template
         with translation.override("fr"):
             actual = cached(data={"name": "taken"})
