@@ -46,8 +46,12 @@ async def test_typed_codecs_roundtrip_without_pickle(codec):
     decoded = await cache._callback(serializer.loads, encoded)
     assert decoded.id == value["id"]
     assert decoded.created == value["created"]
-    with pytest.raises(NotImplementedError, match="counter"):
-        await cache.aincr("unsupported")
+    if codec == "MsgspecCodec":
+        # aiodrf-async-cache 0.2 stores integers as Redis integers.
+        assert serializer.supports_integer_operations
+    else:
+        with pytest.raises(NotImplementedError, match="counter"):
+            await cache.aincr("unsupported")
 
 
 @pytest.mark.parametrize("codec_name", ["MsgspecCodec", "PydanticCodec"])
