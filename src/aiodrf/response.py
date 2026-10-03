@@ -60,7 +60,7 @@ __all__ = [
 ]
 
 
-# What DRF's encoder converts without running anything of the application's.
+# Types DRF's encoder converts without running any application code.
 _PLAIN = frozenset(
     (
         type(None),

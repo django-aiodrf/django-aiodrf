@@ -594,7 +594,7 @@ def _rename_action(element: cst.BaseDictElement) -> cst.BaseDictElement:
 
 
 class _Scope:
-    """What the rewrite knows about one class it is inside."""
+    """The rewrite's knowledge of one enclosing class."""
 
     __slots__ = ("name", "renames", "serializer", "view")
 

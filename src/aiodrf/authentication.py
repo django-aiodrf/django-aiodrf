@@ -84,7 +84,7 @@ def _adds_code(cls: type, klass: type) -> bool:
     return False
 
 
-# What :func:`_authentication_kind` answers besides a class to find a check for.
+# Results of :func:`_authentication_kind` other than a class to look up.
 _SESSION = "session"
 _CALL = "call"
 

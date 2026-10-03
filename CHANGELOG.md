@@ -6,6 +6,30 @@ consolidated here rather than represented as separate published releases.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-03
+
+### Changed
+
+- django-fastdrf 0.5 is accepted (`django-fastdrf>=0.4,<0.6`). Its
+  `fastdrf.msgspec.http.JsonResponse` and `fastdrf.msgspec.html.json_script`
+  serve views and templates outside DRF; the
+  [msgspec guide](https://github.com/django-aiodrf/django-aiodrf/blob/main/docs/guides/msgspec-pydantic.md#3-json-renderer-and-parser)
+  links them.
+- `aiodrf.asgi.get_asgi_application()` annotates its `lifespan` argument
+  (a dotted path, a lifespan factory or `None`) instead of `Any`. Behaviour
+  is unchanged.
+- The development dependencies and the ecosystem tests use
+  aiodrf-async-cache 0.2.
+
+### Documentation
+
+- The async cache guide describes counting with `MsgspecCodec`, compression
+  with `CompressedCodec` and `aiodrf_async_cache.singleflight.aget_or_set`.
+- The lifespan guide names the ASGI servers aiodrf-asgi-lifespan is tested
+  with, says that Daphne does not run the lifespan protocol, describes the
+  order of signal receivers per Django version, and replaces the advice to
+  write a readiness check with `cache_lifespan(ping=True)`.
+
 ## [0.0.3] - 2026-10-03
 
 Timings in this section were measured on the machine described in

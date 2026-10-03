@@ -146,7 +146,7 @@ def _sync_is_valid(serializer: Any, raise_exception: bool) -> bool:
 
         value = recognize(serializer, backend=backend)
         if value is not NOT_RECOGNIZED:
-            # What DRF's ``is_valid()`` leaves behind for valid input.
+            # The state DRF's ``is_valid()`` leaves for valid input.
             serializer._validated_data = value
             serializer._errors = (
                 [] if isinstance(serializer, serializers.ListSerializer) else {}

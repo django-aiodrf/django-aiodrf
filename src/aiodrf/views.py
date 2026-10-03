@@ -129,7 +129,7 @@ _DRF_NEGOTIATION = (
 )
 
 
-# Where a project's code runs between building DRF's request and negotiating.
+# Hooks that run project code between building DRF's request and negotiating.
 _BEFORE_NEGOTIATION_HOOKS = (
     "dispatch",
     "initialize_request",
@@ -214,7 +214,7 @@ def _builds_throttles_inline(view_class: Any, throttle_classes: Any) -> bool:
     )
 
 
-# What building an object runs of its class.
+# The class methods that building an object runs.
 _CONSTRUCTORS = ("__new__", "__init__")
 
 
@@ -1334,6 +1334,6 @@ class APIView(views.APIView):
         return response
 
 
-# Where the planned steps of a view are defined when it leaves them to the
+# Classes that define a view's planned steps when it leaves them to the
 # framework (``_class_plan``).
 _PLAN_DEFINERS = frozenset({View, views.APIView, APIView})

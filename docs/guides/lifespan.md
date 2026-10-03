@@ -135,8 +135,9 @@ Configure the [native cache alias](async-cache.md#backend-configuration) before
 using this example. In a view, obtain `get_lifespan_state(request, Resources)`
 once and reuse its members. Client construction may be lazy: entering a context
 does not necessarily contact a server. If availability is a startup requirement,
-perform an explicit bounded readiness check before yielding. Otherwise handle
-failures during use according to the application's policy.
+check it before yielding: `cache_lifespan("native", ping=True)` sends one `PING`
+and fails startup when the server does not answer. Otherwise handle failures
+during use according to the application's policy.
 
 ### Request-path overhead
 
@@ -164,7 +165,11 @@ The managed sequence is:
 5. Invalidate request-state access and exit the context; only then send
    `lifespan.shutdown.complete`.
 
-Sync and async signal receivers are dispatched as Django dispatches them. A
+Sync and async signal receivers are dispatched as Django dispatches them, so
+receivers must not depend on each other's order: async receivers run
+concurrently, Django 5.2 and 6.0 also run the sync receivers concurrently with
+them, and Django 6.1 runs the sync receivers first. Every failing receiver is logged
+by the `django.dispatch` logger; the first failure is the one reported. A
 receiver failure produces the phase's `.failed` message with its traceback,
 after managed cleanup; a context that suppresses the exception cannot turn the
 phase into a success. If cleanup raises too, the traceback keeps the exception
@@ -201,7 +206,10 @@ and shallow request-state copies, so each worker opens its own clients. See the
 
 ## Deployment limits
 
-- The ASGI server must run the lifespan protocol. WSGI `runserver`, management
+- The ASGI server must run the lifespan protocol and propagate
+  `scope["state"]`. Uvicorn, Granian and Hypercorn are tested by
+  aiodrf-asgi-lifespan; Daphne 4.2.3 does not run the lifespan protocol, so
+  with Daphne the getter raises and the signals are not sent. WSGI `runserver`, management
   commands and a server with lifespan disabled do not enter the web application's
   lifespan; the getter then raises instead of opening a pool on the first request.
   An [AsyncCommand](management-commands.md#lifespan-resources) can explicitly enter

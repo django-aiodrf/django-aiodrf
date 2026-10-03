@@ -26,7 +26,7 @@ incorrect to describe it as only an async view decorator. Its smaller API surfac
 can be appropriate for an application already using its action names and
 serializer conventions.
 
-## Why aiodrf has a separate execution layer
+## Rationale for a separate execution layer
 
 aiodrf's distinguishing requirement is mixed extension code: existing sync DRF
 overrides, new async hooks and shared classes used by both sync and async views.

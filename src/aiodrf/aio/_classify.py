@@ -32,7 +32,7 @@ _BUILTIN_VALIDATORS = frozenset(
 
 
 class Kind(enum.IntEnum):
-    """How a piece of validation code may run, ordered by cost."""
+    """The execution class of a piece of validation code, ordered by cost."""
 
     PURE = 0
     UNKNOWN = 1
@@ -353,7 +353,7 @@ def _class_kinds(serializer: Any) -> dict[Any, Any] | None:
         return _CLASS_KINDS.setdefault(cls, {})
 
 
-# Which serializers are a function of their class: django-fastdrf's rule
+# Serializers that are a function of their class: django-fastdrf's rule
 # (``fastdrf._classify``), with aiodrf's classes as framework code, as
 # everywhere in aiodrf (:func:`aiodrf.utils.user_defines`). django-fastdrf's
 # compiler and caches answer with its own rule, for which only the bases

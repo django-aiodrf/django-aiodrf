@@ -156,7 +156,7 @@ TARGETS = {
     "keep_json_encoders": (renderers.JSONRenderer, "render"),
 }
 
-# What the class itself held before the patch: its own member, or none (DRF's
+# The class's own member before the patch, or none (DRF's
 # ``Response`` inherits ``close`` from Django's ``HttpResponseBase``).
 _MISSING = object()
 _originals: dict[str, object] = {}

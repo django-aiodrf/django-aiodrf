@@ -249,7 +249,7 @@ def _is_transparent_wrapper(func: object) -> bool:
 
 
 class ClassCached(Protocol[T_co]):
-    """What :func:`class_cache` returns: the function, and control of its cache."""
+    """The return type of :func:`class_cache`: the function and its cache control."""
 
     def __call__(self, cls: type, /, *args: Any) -> T_co: ...
 
@@ -521,7 +521,7 @@ def bridge_base[T](cls: type[T]) -> type[T]:
     sync/async pair the user implemented.
     """
     _BRIDGE_BASES.add(cls)
-    # What was resolved before this registration treated ``cls`` as user code.
+    # Resolutions made before this registration treated ``cls`` as user code.
     _resolve_class_pair.cache_clear()
     _user_defines.cache_clear()
     _clear_dependents()

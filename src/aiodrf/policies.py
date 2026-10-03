@@ -292,7 +292,7 @@ _FIXED_WINDOW_THROTTLES = {
     ScopedFixedWindowRateThrottle,
 }
 _RATE_THROTTLES = _DRF_RATE_THROTTLES | _FIXED_WINDOW_THROTTLES
-# What a rate throttle's allow_request() reaches (get_ident() from the key,
+# Methods a rate throttle's allow_request() reaches (get_ident() from the key,
 # get_rate()/parse_rate() for a scoped one), and wait(), which the view calls
 # after a denial. DRF's BaseThrottle defines get_ident().
 _RATE_THROTTLE_HOOKS = (

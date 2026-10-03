@@ -1,8 +1,9 @@
-"""All five calls must fail type checking; Any must not make this pass."""
+"""All six calls must fail type checking; Any must not make this pass."""
 
 from aiodrf_asgi_lifespan.asgi import LifespanApplication, get_lifespan_state
 from django.http import HttpRequest
 
+from aiodrf.asgi import get_asgi_application
 from aiodrf.response import StreamingResponse
 from aiodrf.serializers import Serializer
 
@@ -26,5 +27,6 @@ def needs_integer(value: int) -> None:
 
 def invalid_lifespan(http_request: HttpRequest) -> None:
     LifespanApplication(application, lifespan=not_a_context)
+    get_asgi_application(lifespan=not_a_context)
     get_lifespan_state(http_request, "str")
     needs_integer(get_lifespan_state(http_request, str))

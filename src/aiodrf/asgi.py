@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import enum
 import itertools
 import threading
 from collections import deque
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import asynccontextmanager, nullcontext
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from asgiref.sync import SyncToAsync, ThreadSensitiveContext
 from django.conf import settings
@@ -19,12 +20,24 @@ from django.core.handlers.asgi import ASGIHandler
 
 from aiodrf.settings import aiodrf_settings
 
+if TYPE_CHECKING:
+    # Never at runtime: aiodrf runs without the lifespan package.
+    from aiodrf_asgi_lifespan.asgi import LifespanFactory
+
 __all__ = ["get_asgi_application"]
-_UNSET = object()
+
+
+class _Unset(enum.Enum):
+    UNSET = enum.auto()
+
+
+_UNSET = _Unset.UNSET
 _THREAD_STATE_KEY = "aiodrf.request_threads"
 
 
-def get_asgi_application(*, lifespan: Any = _UNSET) -> Callable[..., Awaitable[None]]:
+def get_asgi_application(
+    *, lifespan: str | LifespanFactory[object] | _Unset | None = _UNSET
+) -> Callable[..., Awaitable[None]]:
     """
     Django's ASGI application, answering the lifespan protocol, which Django
     refuses. A resource context (``DJANGO_LIFESPAN``) and request thread

@@ -31,12 +31,12 @@ DEFAULTS: dict[str, object] = {
     # Django groups their sync hooks; a worker stays occupied while a view awaits.
     # Configure before constructing the ASGI/WSGI handler, then restart workers.
     "UNSAFE_SYNC_MIDDLEWARE": False,
-    # Where user-defined synchronous validation code runs (``validate_<field>``,
+    # Execution context of user-defined synchronous validation (``validate_<field>``,
     # ``validate``, validators and fields aiodrf cannot classify):
     #   "thread": in a worker thread, once (the default),
     #   "inline": on the event loop; the project asserts that it never blocks.
     "VALIDATION_UNKNOWN": "thread",
-    # Where ``serializer.data`` is produced when aiodrf is asked for it from
+    # Execution context of ``serializer.data`` when aiodrf is asked for it from
     # async code (generic actions represent inside the hop that fetched):
     #   "thread": in a worker thread, once (the default),
     #   "inline": on the event loop; the project asserts that the instances

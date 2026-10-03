@@ -43,7 +43,7 @@ from aiodrf.utils import (
 if TYPE_CHECKING:
 
     class _View:
-        # What the actions call on the aiodrf ``GenericAPIView`` they are
+        # Methods the actions call on the aiodrf ``GenericAPIView`` they are
         # mixed into; declared for the type checker only.
         def get_serializer(self, *args: Any, **kwargs: Any) -> Any: ...
         def paginate_queryset(self, queryset: Any) -> Any: ...
@@ -96,7 +96,7 @@ _UPDATES = ("perform_update", "aperform_update")
 
 
 class Step(enum.Enum):
-    """Where a synchronous action body stopped because the step needs awaiting."""
+    """The step at which a synchronous action body stopped to be awaited."""
 
     CHECK_OBJECT = "check_object"
     SERIALIZE = "serialize"

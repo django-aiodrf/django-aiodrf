@@ -1,9 +1,11 @@
 """Shared live-ASGI page-cache checks for optional native backends."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import httpx
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
 from aiodrf_async_cache.lifespan import cache_lifespan
 from asgi_lifespan import LifespanManager
 from asgiref.sync import sync_to_async
@@ -104,3 +106,74 @@ async def check_page_cache(config, synchronous_backend):
 
             await sync_to_async(read_synchronously)()
     assert len(retained) == 1
+
+
+async def check_counter_and_single_flight(config):
+    """Count with the msgspec codec; share one computation between requests."""
+    from aiodrf_async_cache.codecs import MsgspecCodec
+    from aiodrf_async_cache.singleflight import aget_or_set
+
+    loads = []
+
+    async def load_summary():
+        loads.append(None)
+        await asyncio.sleep(0.05)
+        return {"loads": len(loads)}
+
+    class Summary(APIView):
+        authentication_classes = []
+        permission_classes = []
+        throttle_classes = []
+
+        async def get(self, request):
+            cache = get_lifespan_state(request, object)
+            return Response(await aget_or_set(cache, "summary", load_summary, 30))
+
+    class Hits(APIView):
+        authentication_classes = []
+        permission_classes = []
+        throttle_classes = []
+
+        async def post(self, request):
+            cache = get_lifespan_state(request, object)
+            await cache.aadd("hits", 0)
+            return Response({"hits": await cache.aincr("hits")})
+
+    @asynccontextmanager
+    async def lifespan():
+        async with cache_lifespan() as backend:
+            try:
+                yield backend
+            finally:
+                await backend.adelete_many(["summary", "hits"])
+
+    with override_settings(
+        ROOT_URLCONF=(
+            path("summary/", Summary.as_view()),
+            path("hits/", Hits.as_view()),
+        ),
+        MIDDLEWARE=[],
+        CACHES={
+            "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+            "native": {**config, "OPTIONS": {"serializer": MsgspecCodec()}},
+        },
+        AIODRF={},
+        DJANGO_LIFESPAN=lifespan,
+        FASTDRF={},
+    ):
+        async with (
+            LifespanManager(get_asgi_application()) as manager,
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=manager.app),
+                base_url="http://testserver",
+            ) as client,
+        ):
+            responses = await asyncio.gather(
+                *(client.get("/summary/") for _ in range(20))
+            )
+            assert {response.status_code for response in responses} == {200}
+            assert {response.content for response in responses} == {b'{"loads":1}'}
+            assert len(loads) == 1
+            for expected in range(1, 4):
+                response = await client.post("/hits/")
+                assert response.json() == {"hits": expected}

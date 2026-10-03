@@ -2,7 +2,7 @@
 name = "aiodrf-example-ecosystem-services"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["aiodrf-async-cache[redis,django-valkey]>=0.1,<0.2", "aiodrf-asgi-lifespan>=0.1,<0.2", "django-aiodrf[opensearch]","Django>=6.1,<6.2","uvicorn>=0.30","httpx>=0.27","celery[redis]","redis>=5.0.1","django-storages[s3]","django-elasticsearch-dsl>=9","elasticsearch[async]>=9.5.1","django-valkey>=0.4.1","sentry-sdk","opentelemetry-instrumentation-django","opentelemetry-instrumentation-asgi","opentelemetry-sdk"]
+dependencies = ["aiodrf-async-cache[redis,django-valkey]>=0.1,<0.3", "aiodrf-asgi-lifespan>=0.1,<0.2", "django-aiodrf[opensearch]","Django>=6.1,<6.2","uvicorn>=0.30","httpx>=0.27","celery[redis]","redis>=5.0.1","django-storages[s3]","django-elasticsearch-dsl>=9","elasticsearch[async]>=9.5.1","django-valkey>=0.4.1","sentry-sdk","opentelemetry-instrumentation-django","opentelemetry-instrumentation-asgi","opentelemetry-sdk"]
 
 [tool.uv]
 package = false

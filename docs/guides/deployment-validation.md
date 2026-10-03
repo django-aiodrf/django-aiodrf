@@ -55,7 +55,7 @@ Session-authenticated requests, the rejection of anonymous requests, and CSRF
 protection on large JSON and multipart `POST` requests work through Nginx as in
 a direct connection.
 
-## What to verify yourself
+## Application-specific checks
 
 These tests use a self-signed certificate on a single machine. They do not
 cover your production TLS setup, ingress controller, CDN, container platform or

@@ -57,7 +57,7 @@ class ModelSerializer(serializers.ModelSerializer):
             if relation_info.to_many and (field_name in validated_data):
                 many_to_many[field_name] = validated_data.pop(field_name)
 
-        # Where Model.objects.create() writes, as the routers say (asked off
+        # The alias Model.objects.create() writes to, per the routers (asked off
         # the loop); passed on, so django-async-backend does not ask again.
         using = await awrite_alias(ModelClass)
         async with _atomic_save(using):

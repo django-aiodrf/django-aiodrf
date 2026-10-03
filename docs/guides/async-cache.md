@@ -468,7 +468,34 @@ CACHES["native"]["OPTIONS"]["serializer"] = PayloadCodec
 Key functions must be deterministic for reads, writes and deletes. If tenant
 context influences a key, capture it explicitly for background operations too.
 `aget_or_set` evaluates its factory only on a miss, but competing misses can each
-run a factory. It is not a distributed lock or single-flight facility.
+run a factory. `aiodrf_async_cache.singleflight.aget_or_set(cache, key, default,
+timeout, version)` takes the same arguments and runs one factory per key and
+version for the concurrent misses of an event loop; the other callers wait for
+its result. A caller that is cancelled does not cancel the computation, and an
+exception reaches every waiting caller and is not cached. It works with any
+cache that has Django's async API. Each worker process still computes once:
+it is not a distributed lock.
+
+```python
+from functools import partial
+
+from aiodrf_asgi_lifespan.asgi import get_lifespan_state
+from aiodrf_async_cache.redis import AsyncRedisCache
+from aiodrf_async_cache.singleflight import aget_or_set
+from aiodrf.response import Response
+from aiodrf.views import APIView
+
+
+class AuthorSummary(APIView):
+    async def get(self, request, pk):
+        cache = get_lifespan_state(request, AsyncRedisCache)
+        # load_summary is the application's coroutine function.
+        summary = await aget_or_set(cache, f"author:{pk}", partial(load_summary, pk), 300)
+        return Response(summary)
+```
+
+For a lock across processes, use the driver's own `cache.async_client.lock()`
+([aiodrf-async-cache](https://github.com/django-aiodrf/aiodrf-async-cache#locks)).
 
 `callback_mode="thread"` is the default. Synchronous value codecs and custom key,
 validation and factory callbacks run in Django's thread-sensitive worker. The
@@ -520,10 +547,20 @@ are 64-bit: `MsgspecCodec` raises `OverflowError` for a larger `int`, which
 Do not replace the codec of a populated alias without changing its prefix or
 version. Typed codecs are for application data, not arbitrary `HttpResponse`
 objects; page-cache middleware should use a separate default-format alias.
-Counters require raw integer wire compatibility. `aincr`/`adecr` reject the
-provided typed codecs; a custom codec may declare
-`supports_integer_operations=True` only if it preserves Redis/Valkey integer
-encoding. Custom hooks and compressed payloads are not automatically compatible.
+Counters require raw integer wire compatibility. From aiodrf-async-cache 0.2.0
+and django-fastdrf 0.5.0, both `MsgspecCodec` classes store integers as
+Redis/Valkey integers and declare `supports_integer_operations=True`, so
+`aincr`/`adecr` work with them; `PydanticCodec` still refuses counters. A custom
+codec may declare the attribute only if it preserves the integer encoding.
+
+`aiodrf_async_cache.codecs.CompressedCodec(codec, compressor="zlib",
+min_size=1024)` compresses the values another codec writes once they reach
+`min_size` bytes, leaves integers raw so counters keep working, and reads
+uncompressed values written before it was enabled. `compressor="zstd"` needs
+CPython 3.14's `compression.zstd`. Django's `RedisCache` cannot read compressed
+values, so a synchronous alias sharing the same keys must not use them.
+The package's README covers its
+[security notes and migration from Django's RedisCache and django-redis](https://github.com/django-aiodrf/aiodrf-async-cache#readme).
 
 ## Tested behaviour
 

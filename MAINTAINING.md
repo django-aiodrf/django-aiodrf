@@ -122,7 +122,7 @@ Adding or dropping a Django or DRF version touches the following places:
 
 | Where | What |
 | --- | --- |
-| `pyproject.toml` | The minimum versions in `dependencies` (`django>=5.2`, `djangorestframework>=3.16`, `asgiref>=3.8.1`, `django-fastdrf>=0.4,<0.5`), the `Framework :: Django :: X.Y` classifiers, the pin of the `async-backend` extra |
+| `pyproject.toml` | The minimum versions in `dependencies` (`django>=5.2`, `djangorestframework>=3.16`, `asgiref>=3.8.1`, `django-fastdrf>=0.4,<0.6`), the `Framework :: Django :: X.Y` classifiers, the pin of the `async-backend` extra |
 | `noxfile.py` | `MATRIX` (the version pairs of `tests` and `unit`), the parameters of `drf_parity` and its per-version test requirements, the pairs of `adrf_compat`, `differential` and `ecosystem_mongodb`, the exact minimum versions of `tests_minimum`, and `FASTDRF`, the django-fastdrf requirement every session installs (`AIODRF_FASTDRF` overrides it) |
 | `.github/workflows/tests.yml` | The version pairs of the `matrix` and `unit` jobs; the `drf_parity`, `adrf_compat` and `differential` entries of the `compatibility` job |
 | `src/aiodrf/compat.py` | Each flag states the version that ends it (see [raising a minimum version](#raising-a-minimum-version)). Raising a minimum version is a search for the flag in `views.py`, `checks.py`, `generics.py`, `cache.py`, `serializers.py`, `aio/_validate.py`, `aio/_loaded.py`, `decorators.py` and `contrib/adrf_compat/` |

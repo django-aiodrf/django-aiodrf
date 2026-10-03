@@ -764,6 +764,15 @@ value on and the field answers (`{"a": ["A valid number is required."]}`);
 a body with such a value in a field the serializer ignores is refused
 whole.
 
+Views outside DRF, such as a health check or a webhook receiver written as a
+plain async Django view, can answer with django-fastdrf's
+`fastdrf.msgspec.http.JsonResponse`. It takes the arguments of Django's
+`JsonResponse` except `encoder` and `json_dumps_params`, encodes with msgspec,
+and knows the types registered with `register_msgspec_type()`. Its output
+follows msgspec, not `DjangoJSONEncoder`: datetimes keep their microseconds,
+for example. `fastdrf.msgspec.html.json_script` does the same for templates
+([Django utilities](https://github.com/ctolon/django-fastdrf/blob/main/docs/django-utilities.md)).
+
 ## 4. Rolling out
 
 Set `Meta.serializer_backend` on the serializers of list endpoints first and

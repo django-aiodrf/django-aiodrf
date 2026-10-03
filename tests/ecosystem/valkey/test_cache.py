@@ -279,3 +279,16 @@ async def test_page_middleware_and_lifespan_share_native_pool(backend):
     if backend.startswith("aiodrf_async_cache."):
         params["OPTIONS"] = {"socket_connect_timeout": 2, "socket_timeout": 2}
     await check_page_cache(params, "django_valkey.cache.ValkeyCache")
+
+
+@pytest.mark.skipif(not URL, reason="Requires a dedicated Valkey test service")
+async def test_codec_counter_and_single_flight_through_aiodrf_views():
+    from tests.ecosystem.cache_contracts import check_counter_and_single_flight
+
+    await check_counter_and_single_flight(
+        {
+            "BACKEND": "aiodrf_async_cache.valkey.AsyncValkeyCache",
+            "LOCATION": URL,
+            "KEY_PREFIX": "valkey-counter-" + uuid4().hex,
+        }
+    )
