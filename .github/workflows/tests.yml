@@ -96,7 +96,7 @@ jobs:
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage.core
           PYTEST_ADDOPTS: ${{ matrix.python == '3.14' && matrix.pair == 'django6.1-drf3.18' && '--cov=aiodrf --cov-report= --cov-fail-under=0' || '' }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: matrix.python == '3.14' && matrix.pair == 'django6.1-drf3.18'
         with:
           name: coverage-core
@@ -172,7 +172,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: uv run --no-sync nox -s ecosystem integrations ecosystem_valkey ecosystem_redis ecosystem_opensearch
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-ecosystem
           path: .coverage.ecosystem
@@ -204,7 +204,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: uv run --no-sync nox -s tests_postgres ecosystem_tenants native_db
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-postgres
           path: .coverage.postgres
@@ -226,7 +226,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: docker compose -f tests/services/compose.yaml up -d --wait mongodb
       - run: uv run --no-sync nox -s ecosystem_mongodb
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-mongodb
           path: .coverage.mongodb
@@ -246,12 +246,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: coverage-*
           merge-multiple: true
       - run: uv run --no-sync nox -s coverage
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: |
@@ -317,7 +317,7 @@ jobs:
           cd /tmp
           "$wheel_env/bin/python" "$GITHUB_WORKSPACE/tests/distribution/smoke.py" core
       - run: python tools/release.py manifest --sha "$GITHUB_SHA"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ github.sha }}
           path: |
